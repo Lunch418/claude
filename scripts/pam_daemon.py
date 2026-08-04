@@ -102,7 +102,8 @@ _DANGEROUS = re.compile(
     r'\b(insert|update|delete|drop|alter|create|truncate|copy|'
     r'grant|revoke|call|do|execute|vacuum|analyze|'
     r'pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|'
-    r'lo_import|lo_export|dblink|pg_terminate_backend|pg_sleep)\b', re.I
+    r'lo_import|lo_export|dblink|pg_terminate_backend|'
+    r'pg_cancel_backend|pg_sleep(?:_for|_until)?)\b', re.I
 )
 
 def validate_readonly(sql: str) -> None:
@@ -498,6 +499,21 @@ class Daemon:
             if sql == '__clear_cache__':
                 cleared = self.cache.clear_all()
                 conn.sendall(json.dumps({'ok': True, 'cleared': cleared}).encode() + b'\n')
+                return
+
+            # Доверенная внутренняя отмена бэкенда PostgreSQL по pid.
+            # Идёт мимо validate_readonly: pg_cancel_backend запрещён в
+            # пользовательском SQL, но приложению нужно отменять свои же
+            # тяжёлые запросы (RemoteRunner::cancelBackend).
+            if sql.startswith('__cancel__:'):
+                try:
+                    _pid = int(sql.split(':', 1)[1])
+                except (ValueError, IndexError):
+                    conn.sendall(json.dumps({'ok': False, 'error': 'bad pid'}).encode() + b'\n')
+                    return
+                res = self._execute_query(f'SELECT pg_cancel_backend({_pid})', 'preview', 1, profile, '')
+                conn.sendall(json.dumps(res, default=str).encode() + b'\n')
+                log.info('CANCEL backend pid=%d profile=%s ok=%s', _pid, profile, res.get('ok'))
                 return
 
             if not sql:

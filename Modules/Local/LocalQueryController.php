@@ -48,16 +48,11 @@ class LocalQueryController
 
     private function validateSql(string $sql): void
     {
-        $q = preg_replace('/\/\*.*?\*\//s', ' ', $sql);
-        $q = preg_replace('/--[^\n]*/', ' ', $q);
-        $q = trim($q);
-
-        if (preg_match('/\b(insert|update|delete|drop|alter|create|truncate|copy|grant|revoke)\b/i', $q)) {
-            throw new \RuntimeException('Only SELECT allowed');
-        }
-        if (!preg_match('/^\s*(select|with)\b/i', $q)) {
-            throw new \RuntimeException('Only SELECT allowed');
-        }
+        // Единый строгий валидатор (V-05): тот же чёрный список функций
+        // (pg_read_file/lo_import/dblink/…), запрет ';' и только SELECT/WITH,
+        // что и для удалённых источников. Иначе локальная лог-БД (на том же
+        // хосте, что и веб-сервер) — путь к LFI через pg_read_file.
+        RemoteRunner::assertReadOnly($sql);
     }
 
     public function query(): void

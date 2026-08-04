@@ -70,7 +70,8 @@ _DANGEROUS = re.compile(
     r'\b(insert|update|delete|drop|alter|create|truncate|copy|'
     r'grant|revoke|call|do|execute|vacuum|analyze|'
     r'pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|'
-    r'lo_import|lo_export|dblink|pg_terminate_backend|pg_sleep)\b', re.I
+    r'lo_import|lo_export|dblink|pg_terminate_backend|'
+    r'pg_cancel_backend|pg_sleep(?:_for|_until)?)\b', re.I
 )
 
 def validate_readonly(sql):
@@ -229,6 +230,7 @@ try:
         user=os.environ['_SED_DBUSER'],
         password=os.environ['_SED_DBPASS'],
         connect_timeout=10,
+        options='-c statement_timeout=590000',
     )
     cn.autocommit = True
     cu = cn.cursor()

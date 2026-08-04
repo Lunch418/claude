@@ -168,22 +168,14 @@ class RemoteController {
 
     private const MAX_JOBS_PER_USER = 3;
 
-    // ── Валидация SQL ─────────────────────────────────────────
+    // ── Валидация SQL — единый источник правды (RemoteRunner) ──
     private function validateSqlOrFail(string $sql): ?string {
-        $clean = preg_replace('/\/\*.*?\*\//s', ' ', $sql);
-        $clean = preg_replace('/--[^\n]*/', ' ', $clean);
-        $clean = trim($clean);
-        if (str_contains($clean, ';'))
-            return 'Многострочные запросы запрещены (;)';
-        if (!preg_match('/^\s*(select|with)\b/i', $clean))
-            return 'Разрешены только SELECT-запросы';
-        $forbidden = ['insert','update','delete','drop','alter','create',
-                      'truncate','copy','grant','revoke','execute','call',
-                      'pg_read_file','pg_read_binary_file','pg_ls_dir','pg_stat_file',
-                      'lo_import','lo_export','dblink','pg_terminate_backend','pg_sleep'];
-        if (preg_match('/\b(' . implode('|', $forbidden) . ')\b/i', $clean))
-            return 'Запрос содержит запрещённые операторы';
-        return null;
+        try {
+            RemoteRunner::assertReadOnly($sql);
+            return null;
+        } catch (\InvalidArgumentException $e) {
+            return $e->getMessage();
+        }
     }
 
     private function cleanJob(string $jobId): void {
@@ -463,11 +455,10 @@ class RemoteController {
     // ── Отмена запроса на стороне PostgreSQL ──────────────────
     private function cancelRemoteQuery(int $pgPid): void {
         try {
-            $runner = new \RemoteRunner();
-            // Отправляем через daemon (быстро) или fallback — не важно,
-            // важно что запрос выполнится даже если основной канал занят
-            $cancelSql = "SELECT pg_cancel_backend({$pgPid})";
-            $runner->runQuery($cancelSql, 'preview', 1);
+            // Доверенный канал: pg_cancel_backend закрыт для пользовательского
+            // SQL (V-04), поэтому отменяем собственный бэкенд спец-командой
+            // демону мимо валидатора.
+            (new \RemoteRunner())->cancelBackend($pgPid);
         } catch (\Throwable $e) {
             error_log('[cancel] pg_cancel_backend failed: ' . $e->getMessage());
         }

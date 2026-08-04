@@ -55,11 +55,21 @@ class RemoteRunner {
      *
      * @throws \InvalidArgumentException если SQL не прошёл валидацию
      */
-    private function validateSql(string $sql): void
+    /**
+     * Единый строгий валидатор read-only SQL — ЕДИНСТВЕННЫЙ источник правды.
+     * Используется RemoteRunner, RemoteController::submit и LocalQueryController,
+     * чтобы правила не расходились между путями (V-04/V-05).
+     *
+     * Важно: блэклист по ключевым словам — не граница безопасности, а лишь
+     * дополнительный рубеж. Настоящая граница — привилегии роли БД
+     * (NOSUPERUSER, read-only, без доступа к pg_authid/pg_read_file).
+     *
+     * @throws \InvalidArgumentException если SQL не прошёл валидацию
+     */
+    public static function assertReadOnly(string $sql): void
     {
-        // Удаляем блочные комментарии /* ... */
+        // Удаляем блочные /* ... */ и строчные -- ... комментарии
         $clean = preg_replace('/\/\*.*?\*\//s', ' ', $sql);
-        // Удаляем строчные комментарии -- ...
         $clean = preg_replace('/--[^\n]*/', ' ', $clean);
         $clean = trim($clean);
 
@@ -73,15 +83,31 @@ class RemoteRunner {
             throw new \InvalidArgumentException('Разрешены только SELECT-запросы');
         }
 
-        // Блокируем опасные операторы даже внутри подзапросов
+        // pg_sleep + pg_sleep_for/pg_sleep_until — DoS длинным сном.
+        // \bpg_sleep\b НЕ ловит pg_sleep_for (после sleep идёт «_»), поэтому
+        // отдельное правило на всё семейство.
+        if (preg_match('/\bpg_sleep(_for|_until)?\b/i', $clean)) {
+            throw new \InvalidArgumentException('Запрос содержит запрещённые операторы');
+        }
+
+        // Блокируем опасные операторы даже внутри подзапросов.
+        // pg_cancel_backend закрыт для пользовательского SQL (отмена чужих
+        // бэкендов); отмена собственных запросов приложения идёт доверенным
+        // каналом RemoteRunner::cancelBackend() мимо этого валидатора.
         $forbidden = ['insert', 'update', 'delete', 'drop', 'alter', 'create',
                       'truncate', 'copy', 'grant', 'revoke', 'execute', 'call',
                       'pg_read_file', 'pg_read_binary_file', 'pg_ls_dir', 'pg_stat_file',
-                      'lo_import', 'lo_export', 'dblink', 'pg_terminate_backend', 'pg_sleep'];
+                      'lo_import', 'lo_export', 'dblink',
+                      'pg_terminate_backend', 'pg_cancel_backend'];
         $pattern   = '/\b(' . implode('|', $forbidden) . ')\b/i';
         if (preg_match($pattern, $clean)) {
             throw new \InvalidArgumentException('Запрос содержит запрещённые операторы');
         }
+    }
+
+    private function validateSql(string $sql): void
+    {
+        self::assertReadOnly($sql);
     }
 
     /**
@@ -181,6 +207,46 @@ class RemoteRunner {
         return is_array($result)
             ? $result
             : ['ok' => false, 'error' => 'Invalid daemon response'];
+    }
+
+    /**
+     * Доверенная отмена бэкенда PostgreSQL по pid — только для самого
+     * приложения (отмена собственных тяжёлых запросов). Идёт мимо
+     * пользовательского SELECT-валидатора спец-командой демону
+     * (`__cancel__:<pid>`), т.к. pg_cancel_backend для пользовательского
+     * SQL запрещён. Работает через демон; при его отсутствии — no-op.
+     */
+    public function cancelBackend(int $pid, string $profile = 'sed'): bool
+    {
+        if ($pid <= 1) return false;
+
+        $errno = 0; $errstr = '';
+        $fp = @stream_socket_client(
+            'unix://' . $this->socketPath, $errno, $errstr, 3, STREAM_CLIENT_CONNECT
+        );
+        if (!$fp) return false;
+
+        stream_set_timeout($fp, 10);
+        $payload = json_encode([
+            'sql'     => '__cancel__:' . $pid,
+            'mode'    => 'preview',
+            'limit'   => 1,
+            'profile' => $profile,
+        ], JSON_UNESCAPED_UNICODE);
+
+        @fwrite($fp, $payload . "\n");
+
+        $resp = '';
+        while (!feof($fp)) {
+            $chunk = fgets($fp, 8192);
+            if ($chunk === false) break;
+            $resp .= $chunk;
+            if (str_contains($resp, "\n")) break;
+        }
+        fclose($fp);
+
+        $d = json_decode(trim($resp), true);
+        return is_array($d) && !empty($d['ok']);
     }
 
     private function runViaProcess(string $sql, string $mode, int $limit): array {
