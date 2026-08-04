@@ -11,7 +11,7 @@ pam_daemon.py — Персистентный SSH-демон для СЭД.
   python3 pam_daemon.py --foreground # запуск на переднем плане (для отладки)
 """
 
-import os, sys, json, time, socket, threading, signal, hashlib, re, base64, secrets, logging
+import os, sys, json, time, socket, threading, signal, hashlib, re, base64, secrets, logging, queue
 from pathlib import Path
 
 
@@ -94,6 +94,19 @@ KSP_DB_PORT = os.environ.get('KSP_DB_PORT', '5432')
 KSP_DB_NAME = os.environ.get('KSP_DB_NAME', '')
 KSP_DB_USER = os.environ.get('KSP_DB_USER', '')
 KSP_DB_PASS = os.environ.get('KSP_DB_PASS', '')
+
+# ── Размер пула SSH-сессий на профиль ──────────────────────────────
+# Параллелизм запросов: до N разных запросов профиля идут одновременно
+# (снимает сериализацию через одну сессию). Подбирать под лимиты sshd
+# (MaxSessions/MaxStartups) на бастионе/ВМ и допустимые коннекты PostgreSQL.
+def _pool_size(name, default):
+    try:
+        return max(1, int(os.environ.get(name, '') or default))
+    except (TypeError, ValueError):
+        return default
+SED_POOL_SIZE  = _pool_size('SED_POOL_SIZE',  4)
+CHED_POOL_SIZE = _pool_size('CHED_POOL_SIZE', 2)
+KSP_POOL_SIZE  = _pool_size('KSP_POOL_SIZE',  2)
 
 # Имя схемы: только латиница/цифры/подчёркивание (для search_path)
 _SCHEMA_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
@@ -362,84 +375,114 @@ class Session:
             except: pass
             self.child = None
 
+class SessionPool:
+    """Пул SSH-сессий одного профиля: до `size` параллельных запросов.
+    Сессии создаются лениво и подключаются при первом использовании."""
+    def __init__(self, factory, size):
+        self._factory = factory
+        self._size = max(1, int(size))
+        self._all = []
+        self._free = queue.Queue()
+        self._build_lock = threading.Lock()
+
+    def _ensure_built(self):
+        with self._build_lock:
+            while len(self._all) < self._size:
+                s = self._factory()
+                self._all.append(s)
+                self._free.put(s)
+
+    def acquire(self, timeout):
+        """Взять свободную сессию (блокирует до timeout секунд)."""
+        self._ensure_built()
+        return self._free.get(timeout=timeout)
+
+    def release(self, sess):
+        self._free.put(sess)
+
+    def keepalive(self):
+        """Пингуем только СЕЙЧАС свободные сессии, не мешая занятым."""
+        drained = []
+        while True:
+            try:
+                drained.append(self._free.get_nowait())
+            except queue.Empty:
+                break
+        for s in drained:
+            try:
+                if s.alive:
+                    s.ping()
+            except Exception:
+                pass
+            self._free.put(s)
+
+    def close_all(self):
+        for s in self._all:
+            try:
+                s.close()
+            except Exception:
+                pass
+
+    def any_alive(self):
+        return any(getattr(s, 'alive', False) for s in self._all)
+
+
 class Daemon:
     def __init__(self):
-        self.sess  = Session(PAM_USER, PAM_PASS, TARGET_HOST, TARGET_USER, TARGET_PASS,
-                             DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS)
-        self.ched_sess   = None
-        self._ched_lock  = threading.Lock()
-        self.ksp_sess    = None
-        self._ksp_lock   = threading.Lock()
+        # Пулы SSH-сессий по профилям: 'sed', 'ched' (общий для ched/ched2), 'ksp'
+        self._pools      = {}
+        self._pools_lock = threading.Lock()
         self.cache = Cache()
         self._stop = threading.Event()
         self._inflight      = {}
         self._inflight_lock = threading.Lock()
 
-    def _connect(self):
-        for n in range(1, MAX_RECONNECTS + 1):
-            try:
-                self.sess.close()
-                self.sess.connect()
-                return
-            except Exception as e:
-                log.error('Попытка %d/%d: %s', n, MAX_RECONNECTS, e)
-                if n < MAX_RECONNECTS:
-                    time.sleep(5 * n)
-        raise RuntimeError('Не удалось подключиться')
-
-    def _get_session(self, profile):
-        """Возвращает живую сессию для профиля.
-        CHED и CHED2 живут на одной ВМ → общая CHED-сессия.
-        KSP — своя независимая сессия."""
-        if profile == 'ksp':
-            with self._ksp_lock:
+    def _pool_for(self, profile):
+        """Пул для профиля. CHED и CHED2 живут на одной ВМ → общий пул
+        (в CHED2 отличается только БД через db_override). KSP — свой."""
+        key = 'ched' if profile in ('ched', 'ched2') else profile
+        with self._pools_lock:
+            pool = self._pools.get(key)
+            if pool is not None:
+                return pool
+            if key == 'sed':
+                factory = lambda: Session(PAM_USER, PAM_PASS, TARGET_HOST, TARGET_USER, TARGET_PASS,
+                                          DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS)
+                size = SED_POOL_SIZE
+            elif key == 'ched':
+                if not CHED_TARGET_HOST:
+                    raise RuntimeError('CHED не настроен: нет CHED_TARGET_HOST в .env')
+                factory = lambda: Session(CHED_PAM_USER, CHED_PAM_PASS, CHED_TARGET_HOST, CHED_TARGET_USER, CHED_TARGET_PASS,
+                                          CHED_DB_HOST, CHED_DB_PORT, CHED_DB_NAME, CHED_DB_USER, CHED_DB_PASS)
+                size = CHED_POOL_SIZE
+            elif key == 'ksp':
                 if not KSP_TARGET_HOST:
                     raise RuntimeError('KSP не настроен: нет KSP_TARGET_HOST в .env')
-                if self.ksp_sess is None:
-                    self.ksp_sess = Session(
-                        KSP_PAM_USER, KSP_PAM_PASS,
-                        KSP_TARGET_HOST, KSP_TARGET_USER, KSP_TARGET_PASS,
-                        KSP_DB_HOST, KSP_DB_PORT, KSP_DB_NAME, KSP_DB_USER, KSP_DB_PASS)
-                if not self.ksp_sess.alive:
-                    last = None
-                    for n in range(1, MAX_RECONNECTS + 1):
-                        try:
-                            self.ksp_sess.close()
-                            self.ksp_sess.connect()
-                            break
-                        except Exception as e:
-                            last = e
-                            log.error('KSP-подключение %d/%d: %s', n, MAX_RECONNECTS, e)
-                            if n < MAX_RECONNECTS:
-                                time.sleep(5 * n)
-                    if not self.ksp_sess.alive:
-                        raise RuntimeError(f'KSP: не удалось подключиться: {last}')
-                return self.ksp_sess
-        if profile not in ('ched', 'ched2'):
-            return self.sess
-        with self._ched_lock:
-            if not CHED_TARGET_HOST:
-                raise RuntimeError('CHED не настроен: нет CHED_TARGET_HOST в .env')
-            if self.ched_sess is None:
-                self.ched_sess = Session(
-                    CHED_PAM_USER, CHED_PAM_PASS,
-                    CHED_TARGET_HOST, CHED_TARGET_USER, CHED_TARGET_PASS,
-                    CHED_DB_HOST, CHED_DB_PORT, CHED_DB_NAME, CHED_DB_USER, CHED_DB_PASS)
-            if not self.ched_sess.alive:
-                last = None
-                for n in range(1, MAX_RECONNECTS + 1):
-                    try:
-                        self.ched_sess.close()
-                        self.ched_sess.connect()
-                        break
-                    except Exception as e:
-                        last = e
-                        log.error('CHED-подключение %d/%d: %s', n, MAX_RECONNECTS, e)
-                        if n < MAX_RECONNECTS:
-                            time.sleep(5 * n)
-                if not self.ched_sess.alive:
-                    raise RuntimeError(f'CHED: не удалось подключиться: {last}')
-            return self.ched_sess
+                factory = lambda: Session(KSP_PAM_USER, KSP_PAM_PASS, KSP_TARGET_HOST, KSP_TARGET_USER, KSP_TARGET_PASS,
+                                          KSP_DB_HOST, KSP_DB_PORT, KSP_DB_NAME, KSP_DB_USER, KSP_DB_PASS)
+                size = KSP_POOL_SIZE
+            else:
+                raise RuntimeError(f'Неизвестный профиль: {profile}')
+            pool = SessionPool(factory, size)
+            self._pools[key] = pool
+            return pool
+
+    def _ensure_connected(self, sess):
+        """Подключает сессию (с ретраями), если она не живая."""
+        if sess.alive:
+            return
+        last = None
+        for n in range(1, MAX_RECONNECTS + 1):
+            try:
+                sess.close()
+                sess.connect()
+                return
+            except Exception as e:
+                last = e
+                log.error('Подключение %d/%d: %s', n, MAX_RECONNECTS, e)
+                if n < MAX_RECONNECTS:
+                    time.sleep(5 * n)
+        raise RuntimeError(f'не удалось подключиться: {last}')
 
     def _execute_query(self, sql, mode, limit, profile='sed', schema=''):
         # CHED2 ходит в другую базу на той же CHED-ВМ
@@ -447,28 +490,28 @@ class Daemon:
         if profile == 'ched2':
             db_override = (CHED2_DB_HOST, CHED2_DB_PORT, CHED2_DB_NAME,
                            CHED_DB_USER, CHED_DB_PASS)
-        res = None
-        for attempt in range(2):
-            try:
-                sess = self._get_session(profile)
-                res = sess.run(sql, mode, limit, schema, db_override)
-                break
-            except RuntimeError as e:
-                if attempt == 0:
-                    log.warning('Сессия (%s) упала: %s — реконнект', profile, e)
-                    try:
-                        if profile in ('ched', 'ched2'):
-                            self.ched_sess = None   # пересоздать при следующем _get_session
-                        elif profile == 'ksp':
-                            self.ksp_sess = None    # пересоздать при следующем _get_session
-                        else:
-                            self._connect()
-                    except Exception as re_err:
-                        res = {'ok': False, 'error': f'Реконнект не удался: {re_err}'}
-                        break
-                else:
-                    res = {'ok': False, 'error': str(e)}
-        return res
+        pool = self._pool_for(profile)
+        try:
+            sess = pool.acquire(timeout=QUERY_TIMEOUT + 60)
+        except queue.Empty:
+            return {'ok': False, 'error': 'Все сессии заняты, попробуйте позже'}
+        try:
+            for attempt in range(2):
+                try:
+                    self._ensure_connected(sess)
+                    return sess.run(sql, mode, limit, schema, db_override)
+                except RuntimeError as e:
+                    if attempt == 0:
+                        log.warning('Сессия (%s) упала: %s — реконнект', profile, e)
+                        try:
+                            sess.close()
+                        except Exception:
+                            pass
+                        sess.alive = False
+                        continue
+                    return {'ok': False, 'error': str(e)}
+        finally:
+            pool.release(sess)
 
     def _handle(self, conn):
         try:
@@ -492,7 +535,11 @@ class Daemon:
                 return
 
             if sql == '__ping__':
-                conn.sendall(json.dumps({'ok': True, 'pong': True, 'ssh': self.sess.alive}).encode() + b'\n')
+                try:
+                    ssh_ok = self._pool_for('sed').any_alive()
+                except Exception:
+                    ssh_ok = False
+                conn.sendall(json.dumps({'ok': True, 'pong': True, 'ssh': ssh_ok}).encode() + b'\n')
                 return
 
             # Принудительный сброс кэша
@@ -581,17 +628,21 @@ class Daemon:
 
     def _keepalive(self):
         while not self._stop.wait(KEEPALIVE_SEC):
-            if not self.sess.alive:
-                log.info('KA: мёртвая сессия — реконнект')
-                try: self._connect()
-                except Exception as e: log.error('KA реконнект: %s', e)
-            else:
-                if not self.sess.ping():
-                    log.warning('KA ping провалился')
+            for pool in list(self._pools.values()):
+                try:
+                    pool.keepalive()
+                except Exception as e:
+                    log.error('KA: %s', e)
 
     def run(self):
+        # Прогреваем sed-пул: одну сессию подключаем сразу — fail-fast по кредам.
         try:
-            self._connect()
+            pool = self._pool_for('sed')
+            sess = pool.acquire(timeout=130)
+            try:
+                self._ensure_connected(sess)
+            finally:
+                pool.release(sess)
         except Exception as e:
             log.critical('Первое подключение: %s', e)
             sys.exit(1)
@@ -632,12 +683,8 @@ class Daemon:
         srv.close()
         try: os.unlink(SOCK_PATH)
         except: pass
-        self.sess.close()
-        if self.ched_sess:
-            try: self.ched_sess.close()
-            except Exception: pass
-        if self.ksp_sess:
-            try: self.ksp_sess.close()
+        for pool in list(self._pools.values()):
+            try: pool.close_all()
             except Exception: pass
         log.info('Остановлен')
 

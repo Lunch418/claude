@@ -70,6 +70,9 @@ php tests/unit.php || RC=1
 step "UNIT: Python"
 python3 tests/unit_py.py || RC=1
 
+step "UNIT: Python (пул сессий демона)"
+python3 tests/unit_pool.py || RC=1
+
 step "BROWSER: Playwright (CSP + делегирование)"
 if [ ! -d /opt/pw-browsers ]; then
   echo "  SKIP: Chromium недоступен"
