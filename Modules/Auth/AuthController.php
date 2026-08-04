@@ -57,14 +57,12 @@ class AuthController
      */
     private function gate2fa(string $key, string $name, bool $isAdmin): void
     {
+        // Признак мобильного клиента влияет ТОЛЬКО на способ выдачи сессии
+        // (bearer-токен вместо cookie) и НЕ пропускает второй фактор.
+        // Заголовок задаётся клиентом, поэтому доверять ему для обхода 2FA
+        // нельзя (V-01): мобильное приложение проходит тот же verify_2fa-флоу.
         $isMobile = (!empty($_SERVER['HTTP_X_MOBILE_CLIENT'])
             && $_SERVER['HTTP_X_MOBILE_CLIENT'] === 'SEDAdmin');
-
-        // Мобильный клиент использует токен-механизм и не проходит 2FA-флоу
-        if ($isMobile) {
-            $this->grantSession($key, $name, $isAdmin, true);
-            return;
-        }
 
         $db = $this->tfaDb();
         if (!$db) {
@@ -76,8 +74,8 @@ class AuthController
         $row = $this->tfaRow($key);
 
         if ($row && $row['enabled']) {
-            // 2FA уже настроен — просим код
-            $_SESSION['pending_2fa'] = ['key' => $key, 'name' => $name, 'isAdmin' => $isAdmin, 'mode' => 'verify', 'tries' => 0];
+            // 2FA уже настроен — просим код (и web, и mobile идут единым путём)
+            $_SESSION['pending_2fa'] = ['key' => $key, 'name' => $name, 'isAdmin' => $isAdmin, 'mode' => 'verify', 'tries' => 0, 'mobile' => $isMobile];
             $this->json(['ok' => false, 'stage' => 'verify_2fa']);
             return;
         }
@@ -88,7 +86,7 @@ class AuthController
         $account = $name !== '' ? $name : $key;
         $_SESSION['pending_2fa'] = [
             'key' => $key, 'name' => $name, 'isAdmin' => $isAdmin,
-            'mode' => 'enroll', 'secret' => $secret, 'tries' => 0,
+            'mode' => 'enroll', 'secret' => $secret, 'tries' => 0, 'mobile' => $isMobile,
         ];
         $this->json([
             'ok' => false, 'stage' => 'enroll_2fa',
@@ -170,7 +168,7 @@ class AuthController
                     VALUES (?, ?, TRUE, ?)
                     ON CONFLICT (user_key) DO UPDATE SET secret = EXCLUDED.secret, enabled = TRUE, user_name = EXCLUDED.user_name");
                 $st->execute([$key, $secret, (string) $pending['name']]);
-                $this->grantSession($key, (string) $pending['name'], (bool) $pending['isAdmin']);
+                $this->grantSession($key, (string) $pending['name'], (bool) $pending['isAdmin'], !empty($pending['mobile']));
                 return;
             }
 
@@ -184,7 +182,7 @@ class AuthController
                 $this->json(['ok' => false, 'error' => 'Неверный код']);
                 return;
             }
-            $this->grantSession($key, (string) $pending['name'], (bool) $pending['isAdmin']);
+            $this->grantSession($key, (string) $pending['name'], (bool) $pending['isAdmin'], !empty($pending['mobile']));
 
         } catch (\Throwable $e) {
             error_log('[Auth::verify2fa] ' . $e->getMessage());
