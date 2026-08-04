@@ -31,6 +31,16 @@ class SystemController
     {
         header('Content-Type: application/json; charset=utf-8');
 
+        // Сброс кэша — только админ (V-08): иначе любой авторизованный
+        // пользователь обнуляет кэш демона → мелкий DoS (каждый запрос
+        // заново бьёт в БД через SSH).
+        global $sessionUser;
+        if (empty($sessionUser['isAdmin'])) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Только для администратора'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
         $cleared = 0;
         $method  = 'direct';
 

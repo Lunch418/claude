@@ -375,6 +375,16 @@ class RemoteController {
         }
 
         $meta    = json_decode(file_get_contents($metaFile), true) ?? [];
+
+        // Проверка владельца задачи (V-07): результат отдаём только автору.
+        // 404 (а не 403) — не раскрываем существование чужого jobId.
+        global $sessionUser;
+        if (($meta['user'] ?? null) !== (string)($sessionUser['name'] ?? '')) {
+            http_response_code(404);
+            echo json_encode(['ok'=>false,'status'=>'error','error'=>'Job not found']);
+            return;
+        }
+
         $elapsed = time() - (int)($meta['created'] ?? time());
 
         if ($elapsed > self::JOB_TIMEOUT) {
@@ -422,8 +432,20 @@ class RemoteController {
         }
 
         $dir     = self::JOB_DIR;
+        $metaFile  = "{$dir}/{$jobId}.meta";
         $pidFile  = "{$dir}/{$jobId}.pid";
         $pgPidFile = "{$dir}/{$jobId}.pgpid";
+
+        // Проверка владельца задачи (V-07): отменять можно только свою.
+        if (file_exists($metaFile)) {
+            $meta = json_decode(@file_get_contents($metaFile), true) ?? [];
+            global $sessionUser;
+            if (($meta['user'] ?? null) !== (string)($sessionUser['name'] ?? '')) {
+                http_response_code(404);
+                echo json_encode(['ok'=>false,'error'=>'Job not found']);
+                return;
+            }
+        }
 
         // 1. Убиваем локальный python3/sh процесс (всю группу процессов)
         if (file_exists($pidFile)) {
