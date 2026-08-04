@@ -211,6 +211,13 @@ def _rows_as_dicts(cursor, cols):
     \"\"\"Fetch all rows as dicts using index (safe with duplicate col names).\"\"\"
     return [dict(zip(cols, row)) for row in cursor.fetchall()]
 
+def _csv_safe(v):
+    # CSV/formula injection: neutralize leading =,+,-,@,\\t,\\r
+    s = '' if v is None else str(v)
+    if s[:1] in ('=', '+', '-', '@', '\\t', '\\r'):
+        return \"'\" + s
+    return s
+
 try:
     import psycopg2, psycopg2.extras
     sql    = os.environ['_SED_SQL']
@@ -246,10 +253,10 @@ try:
         cols = _dedup_cols(cu2.description)
         buf = io.StringIO()
         writer = csv.writer(buf, delimiter=';', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(cols)
+        writer.writerow([_csv_safe(c) for c in cols])
         rows_written = 0
         for row in cu2:
-            writer.writerow([str(v) if v is not None else '' for v in row])
+            writer.writerow([_csv_safe(v) for v in row])
             rows_written += 1
         cu2.close()
         cn.close()
