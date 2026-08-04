@@ -98,17 +98,9 @@ class RemoteController {
             }
         }
 
-        // CSV/formula injection (V-03): значения из БД могут начинаться с
-        // =, +, -, @ (или управляющих \t/\r/=) — тогда Excel/LibreOffice
-        // трактуют ячейку как формулу/DDE. Префиксуем апострофом —
-        // формула нейтрализуется, само значение сохраняется.
-        $csvSafe = static function ($v): string {
-            $s = (string) ($v ?? '');
-            if ($s !== '' && in_array($s[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
-                return "'" . $s;
-            }
-            return $s;
-        };
+        // CSV/formula injection (V-03): нейтрализация вынесена в
+        // RemoteRunner::csvSafeCell (единый источник правды, покрыт тестами).
+        $csvSafe = [RemoteRunner::class, 'csvSafeCell'];
 
         $fh = fopen($csvPath, 'w');
         // UTF-8 BOM для Excel
