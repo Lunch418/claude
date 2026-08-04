@@ -55,6 +55,15 @@ grep -q "http-equiv=\"Content-Security-Policy\"" db_viewer.html \
   && ! grep -q "script-src 'self' 'unsafe-inline'" db_viewer.html \
   && echo "  ok: db_viewer.html meta" || { echo "  FAIL: db_viewer.html meta CSP"; RC=1; }
 
+step "STATIC: assets/js — только живые файлы (без мёртвых дубликатов)"
+EXPECTED="$(printf '%s\n' db_2fa.js db_auth.js db_boot.js db_init.js db_utils.js qrcode.js | sort | tr '\n' ' ')"
+ACTUAL="$(ls assets/js | sort | tr '\n' ' ')"
+if [ "$ACTUAL" = "$EXPECTED" ]; then
+  echo "  ok: ровно 6 живых файлов"
+else
+  echo "  FAIL: ожидалось [$EXPECTED], найдено [$ACTUAL]"; RC=1
+fi
+
 step "UNIT: PHP"
 php tests/unit.php || RC=1
 

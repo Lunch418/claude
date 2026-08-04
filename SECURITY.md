@@ -101,13 +101,19 @@ CSP теперь защищает и сам документ, и API:
 подтверждает ноль `script-src` CSP-violations на экране логина и в оболочке
 приложения и работу делегированных действий.
 
-> Косметика на будущее: дубликаты `assets/js/{db_query,db_saved,db_template,
-> db_app,db_columns,db_export,db_filter,db_fk,db_prefs,db_sqledit,db_table}`
-> приложением НЕ грузятся (живой путь приложения — `private_js/*` через
+> Мёртвые дубликаты `assets/js/{db_query,db_saved,db_template,db_app,
+> db_columns,db_export,db_filter,db_fk,db_prefs,db_sqledit,db_table}` **удалены**
+> (не грузились нигде). Живой путь приложения — `private_js/*` через
 > `Asset:script`; живой путь логина — `assets/js/{db_utils,qrcode,db_2fa,
-> db_auth,db_boot,db_init}`). Их стоит удалить отдельным изменением, чтобы
-> правки не расходились. `style-src 'unsafe-inline'` можно закрыть позже
-> выносом инлайн-стилей.
+> db_auth,db_boot,db_init}` (6 файлов; проверяется `tests/run.sh`).
+>
+> `style-src 'unsafe-inline'` пока оставлен (осознанный компромисс). Закрытие —
+> отдельная крупная задача: вынести ~223 инлайновых `style="..."` (в HTML и в
+> генерируемом `innerHTML`) в классы, 2 инлайновых `<style>` и 5 создаваемых
+> JS `<style>` — во внешний CSS, затем убрать `'unsafe-inline'` из style-src
+> в `db_viewer.html` и `index.php`. `.style.x=`/`cssText` (CSSOM) трогать не
+> нужно — они не подпадают под CSP. Выгода мала (инъекция скриптов уже закрыта
+> V-06), риск регрессий высок — делать отдельно с полным браузерным тестом.
 
 ## Тесты (`tests/`)
 
