@@ -2,6 +2,12 @@
 require_once __DIR__ . '/Config/Config.php';
 Config::load();
 
+// Прод-гигиена (V-12): это JSON-API — стектрейсы с путями/SQL не должны
+// уходить клиенту. Ошибки только в лог. Управляется SED_DEBUG=1 в .env.
+$__debug = filter_var(Config::get('SED_DEBUG', '0'), FILTER_VALIDATE_BOOL);
+ini_set('display_errors', $__debug ? '1' : '0');
+ini_set('log_errors', '1');
+
 require_once __DIR__ . '/Core/RemoteRunner.php';
 require_once __DIR__ . '/Modules/Remote/RemoteController.php';
 require_once __DIR__ . '/Modules/Export/ExportController.php';
@@ -196,8 +202,6 @@ match (true) {
     $m === 'Auth'      && $a === 'lockList'  => (new AuthController())->lockList(),
     $m === 'Auth'      && $a === 'unlockKey' => (new AuthController())->unlockKey(),
     $m === 'Auth'      && $a === 'logout'    => (new AuthController())->logout(),
-    $m === 'Auth'      && $a === 'lockList'  => (new AuthController())->lockList(),
-    $m === 'Auth'      && $a === 'unlockKey' => (new AuthController())->unlockKey(),
     $m === 'Remote'    && $a === 'preview'   => (new RemoteController())->preview(),
     $m === 'Remote'    && $a === 'export'    => (new RemoteController())->export(),
     $m === 'Remote'    && $a === 'submit'    => (new RemoteController())->submit(),

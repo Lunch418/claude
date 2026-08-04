@@ -153,15 +153,6 @@ class RemoteController {
         }
     }
 
-    public function count(): void {
-        header('Content-Type: application/json; charset=utf-8');
-        $body  = json_decode(file_get_contents('php://input'), true) ?? [];
-        $table = preg_replace('/[^a-z0-9_]/i', '', $body['table'] ?? '');
-        if (!$table) { echo json_encode(['ok'=>false,'error'=>'no table']); return; }
-        $result = $this->runner->runQuery("SELECT COUNT(*) as cnt FROM {$table}", 'preview', 1);
-        echo json_encode($result, JSON_UNESCAPED_UNICODE);
-    }
-
     private const JOB_DIR      = '/tmp/sed_jobs';
     private const JOB_TIMEOUT  = 1800;
     private const POLL_TIMEOUT = 1500;
