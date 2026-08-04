@@ -1,0 +1,314 @@
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Просмотр БД</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='url(%23g)'/%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%234e6daa'/%3E%3Cstop offset='100%25' stop-color='%235a4f9e'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cellipse cx='16' cy='10' rx='8' ry='3' fill='none' stroke='%23fff' stroke-width='1.8'/%3E%3Cpath d='M8 10v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6' fill='none' stroke='%23fff' stroke-width='1.8'/%3E%3Cpath d='M8 16v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6' fill='none' stroke='%23fff' stroke-width='1.8'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/css/db_styles.css?v=20260722b">
+<script>
+// Раннее применение сохранённой темы/акцента (до отрисовки, чтобы
+// экран логина сразу был в нужной теме и без мигания).
+(function(){
+  try {
+    var s = JSON.parse(localStorage.getItem('sed_view_settings') || '{}');
+    var r = document.documentElement;
+    if (s.theme) r.dataset.theme = s.theme;
+    if (s.anim === false) r.dataset.anim = 'off';
+    var AC = {
+      classic:['#3d5fa0','#2f4d8a'], blue:['#3b6fd4','#2f5cb8'], sky:['#0d9bd8','#0a83b8'], violet:['#7c5cdb','#674ac0'],
+      pink:['#db5c93','#c04a7d'], green:['#2ba05c','#22864c'], teal:['#12a594','#0e8a7c'],
+      orange:['#e08a2b','#c47522'], red:['#dc4b57','#c03946']
+    };
+    var a = AC[s.accent || 'classic'];
+    if (a) {
+      r.style.setProperty('--c-accent', a[0]);
+      r.style.setProperty('--c-accent-h', a[1]);
+      r.style.setProperty('--c-blue', a[0]);
+      r.style.setProperty('--c-blue-h', a[1]);
+    }
+  } catch(e){}
+})();
+</script>
+<style>
+
+#columnsDropdownWrap { position:relative }
+#columnsDropdown {
+  display:none;
+  position:absolute; top:calc(100% + 6px); right:0; z-index:200;
+  width:240px; max-height:340px;
+  background:var(--c-surface);
+  border:1px solid var(--c-border);
+  border-radius:var(--r);
+  box-shadow:var(--sh-lg);
+  overflow:hidden;
+  flex-direction:column;
+}
+#columnsDropdown.open { display:flex }
+.col-drop-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 10px; border-bottom:1px solid var(--c-border);
+  font-size:11.5px; font-weight:500; color:var(--c-text-2); flex-shrink:0;
+}
+.col-drop-btns { display:flex; gap:4px }
+.col-drop-btn {
+  font-size:11px; padding:2px 7px; border-radius:var(--r-sm);
+  border:1px solid var(--c-border); background:var(--c-surface-2);
+  color:var(--c-text-2); cursor:pointer;
+}
+.col-drop-btn:hover { background:var(--c-accent-bg); color:var(--c-accent) }
+.col-drop-list {
+  overflow-y:auto; padding:4px 0;
+  max-height:280px;
+}
+.col-drop-empty {
+  padding:14px 12px; font-size:12px; color:var(--c-text-3); text-align:center;
+}
+.col-drop-item {
+  display:flex; align-items:center; gap:8px;
+  padding:4px 10px; cursor:pointer;
+  font-size:12.5px; color:var(--c-text);
+}
+.col-drop-item:hover { background:var(--c-accent-soft) }
+.col-drop-item input[type=checkbox] { flex-shrink:0; cursor:pointer; accent-color:var(--c-accent) }
+.col-drop-name {
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-family:var(--font-mono); font-size:10.5px;
+  text-transform:uppercase; letter-spacing:.05em; color:var(--c-text-2);
+}
+
+/* Боковая панель: вкладка Избранное */
+.saved-item {
+  padding:8px 12px; border-bottom:1px solid var(--c-border-soft);
+  font-size:12.5px;
+}
+.saved-item:hover { background:var(--c-accent-soft) }
+.saved-name {
+  font-weight:500; color:var(--c-text);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  margin-bottom:2px;
+}
+.saved-meta { font-size:11px; color:var(--c-text-3); margin-bottom:5px }
+.saved-actions { display:flex; gap:5px }
+.saved-btn-load, .saved-btn-del {
+  padding:2px 8px; font-size:11.5px; border-radius:var(--r-sm);
+  border:1px solid var(--c-border); cursor:pointer; background:var(--c-surface-2);
+}
+.saved-btn-load { color:var(--c-accent) }
+.saved-btn-load:hover { background:var(--c-accent-bg); border-color:var(--c-accent-border) }
+.saved-btn-del  { color:var(--c-red) }
+.saved-btn-del:hover  { background:var(--c-red-bg); border-color:var(--c-red-border) }
+
+/* Кнопка «Сохранить» */
+#btnSaveQuery {
+  font-size:12px; padding:0 10px; color:var(--c-text-2);
+}
+#btnSaveQuery:hover { color:var(--c-accent) }
+
+/* Подсказка: Shift+клик = JSON */
+.table-copy-hint {
+  font-size:11px; color:var(--c-text-3); padding:2px 8px;
+  position:absolute; right:12px; bottom:8px;
+  pointer-events:none; opacity:0.7;
+}
+/* Выбранный вариант экспорта */
+label:has(input[type=radio]:checked) {
+  border-color:var(--c-accent) !important;
+  background:var(--c-accent-bg);
+}
+/* лого-плашка и текст следуют за акцентным цветом */
+.logo-mark { background: linear-gradient(140deg, var(--c-accent) 0%, var(--c-accent-h) 100%) !important; }
+.login-logo-mark { background: linear-gradient(140deg, var(--c-accent) 0%, var(--c-accent-h) 100%) !important; }
+.logo-name { color: var(--c-accent) !important; }
+.logo-name span { color: var(--c-text-3) !important; }
+/* название выбранной таблицы и звезда избранного — в акцентный цвет */
+.tbl-item.active .tbl-name { color: var(--c-accent) !important; }
+.tbl-item.active .tbl-name.sub { color: var(--c-accent-h) !important; }
+.tbl-fav-btn.active { color: var(--c-accent) !important; }
+.tbl-fav-btn:hover { color: var(--c-accent-h) !important; }
+.tmpl-fav-btn.active { color: var(--c-accent) !important; }
+.tmpl-fav-btn:hover { color: var(--c-accent-h) !important; }
+.tmpl-fav-btn.active,
+.tbl-fav-btn.active { filter: drop-shadow(0 0 3px var(--c-accent-border)) !important; }
+/* SQL-редактор: тёмная тема + шрифт данных */
+[data-theme="dark"] #sqlEditorWrap { background: #1f232c !important; border-color: var(--c-border) !important; }
+#sqlEditor, #sqlHighlight { font-family: var(--data-ff, var(--font-mono)) !important; }
+</style>
+</head>
+<body>
+
+<!-- Тело приложения подгружается только после авторизации (index.php?m=Asset&a=shell) -->
+<div id="appRoot"></div>
+
+<style>
+/* ── История запросов ── */
+.hist-tab {
+  font-size:12px; padding:4px 12px;
+  border:1px solid var(--c-border);
+  background:var(--c-surface-2); color:var(--c-text-2);
+  border-radius:var(--r-sm); cursor:pointer;
+}
+.hist-tab.active {
+  background:var(--c-accent-bg);
+  color:var(--c-accent);
+  border-color:var(--c-accent-border);
+}
+.hist-item {
+  padding:10px 14px;
+  border-bottom:1px solid var(--c-border-soft);
+  transition:background .1s;
+}
+.hist-item:last-child { border-bottom:none }
+.hist-item:hover { background:var(--c-accent-soft) }
+.hist-meta {
+  display:flex; align-items:center; gap:8px;
+  margin-bottom:5px; font-size:11.5px;
+}
+.hist-user {
+  font-weight:500; color:var(--c-accent);
+  background:var(--c-accent-bg); padding:1px 7px;
+  border-radius:var(--r-sm);
+}
+.hist-table {
+  color:var(--c-green); font-family:var(--font-mono);
+  font-size:11px; background:var(--c-green-bg);
+  padding:1px 6px; border-radius:var(--r-sm);
+}
+.hist-ts { color:var(--c-text-3); font-size:11px; margin-left:auto }
+.hist-sql {
+  font-family:var(--font-mono); font-size:11.5px;
+  color:var(--c-text); line-height:1.5;
+  white-space:pre-wrap; word-break:break-all;
+  margin-bottom:6px;
+  background:var(--c-surface-2);
+  padding:6px 10px; border-radius:var(--r-sm);
+  border:1px solid var(--c-border-soft);
+}
+.hist-actions { display:flex; gap:6px }
+.hist-btn-load { font-size:11.5px; padding:2px 10px; color:var(--c-accent) }
+.hist-btn-load:hover { background:var(--c-accent-bg) }
+.hist-empty {
+  padding:32px; text-align:center;
+  color:var(--c-text-3); font-size:13px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+</style>
+
+<!-- ── LOGIN OVERLAY ─────────────────────────────────────────── -->
+<div class="login-overlay hidden" id="loginOverlay">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-mark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <ellipse cx="12" cy="5" rx="9" ry="3"/>
+          <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+          <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
+        </svg>
+      </div>
+      <div>
+        <div class="login-title">Просмотр БД</div>
+        <div class="login-subtitle">Введите данные для входа</div>
+      </div>
+    </div>
+
+    <div class="login-field">
+      <label for="loginCombo">Пользователь</label>
+      <div class="org-combo" id="loginCombo" data-val="">
+        <div class="org-combo-val" id="loginComboVal">
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;color:var(--c-text-3)"
+            id="loginComboDisplay">— выберите пользователя —</span>
+          <span class="org-combo-arrow">▾</span>
+        </div>
+        <div class="org-combo-drop">
+          <div class="org-combo-list" id="loginComboList">
+            <div class="org-combo-msg">Загрузка пользователей...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="login-field">
+      <label for="loginPassword">Пароль</label>
+      <div style="position:relative">
+        <input type="password" id="loginPassword" placeholder="Введите пароль"
+          autocomplete="current-password" style="width:100%;padding-right:38px">
+        <button type="button" id="btnTogglePass"
+          onclick="(function(){
+            const inp = document.getElementById('loginPassword');
+            const btn = document.getElementById('btnTogglePass');
+            const show = inp.type === 'password';
+            inp.type = show ? 'text' : 'password';
+            btn.innerHTML = show
+              ? '<svg width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\'><path d=\'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94\'/><path d=\'M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19\'/><line x1=\'1\' y1=\'1\' x2=\'23\' y2=\'23\'/></svg>'
+              : '<svg width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\'><path d=\'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z\'/><circle cx=\'12\' cy=\'12\' r=\'3\'/></svg>';
+          })()"
+          style="position:absolute;right:0;top:0;height:100%;width:36px;
+            background:none;border:none;cursor:pointer;
+            display:flex;align-items:center;justify-content:center;
+            color:var(--c-text-3);transition:color .15s"
+          onmouseover="this.style.color='var(--c-text)'"
+          onmouseout="this.style.color='var(--c-text-3)'"
+          title="Показать/скрыть пароль">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+      <!-- CapsLock индикатор -->
+      <div id="capsWarning" style="
+        display:none; margin-top:6px;
+        font-size:12px; color:#92400e;
+        background:#fffbeb; border:1px solid #fcd34d;
+        border-radius:6px; padding:5px 10px;
+        align-items:center; gap:7px;
+      ">
+          <polyline points="8 17 12 21 16 17"/>
+          <rect x="3" y="3" width="18" height="10" rx="2"/>
+          <line x1="7" y1="8" x2="7" y2="8" stroke-width="3" stroke-linecap="round"/>
+          <line x1="12" y1="8" x2="12" y2="8" stroke-width="3" stroke-linecap="round"/>
+          <line x1="17" y1="8" x2="17" y2="8" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        Включён Caps Lock — пароль вводится заглавными
+      </div>
+    </div>
+
+    <div class="login-error" id="loginError"></div>
+
+    <button class="btn btn-primary login-btn" id="loginBtn">
+      <!--
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:5px">
+        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+        <polyline points="10 17 15 12 10 7"/>
+        <line x1="15" y1="12" x2="3" y2="12"/>
+      </svg>
+      -->
+      Войти
+    </button>
+  </div>
+</div>
+
+<script src="assets/js/db_utils.js?v=20260624"></script>
+<script src="assets/js/qrcode.js?v=20260624"></script>
+<script src="assets/js/db_2fa.js?v=20260624"></script>
+<script src="assets/js/db_auth.js?v=20260624"></script>
+<script>
+  const _origShowApp = window.showApp;
+  window.showApp = function(name, isAdmin) {
+    if (window._showAppGuard) return;
+    window._showAppGuard = true;
+    _origShowApp(name, isAdmin);
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    authInit();
+    document.addEventListener('mousedown', e => {
+      const m = document.getElementById('historyModal');
+      if (m?.classList.contains('open') && e.target === m) closeHistoryModal();
+    });
+  });
+</script>
+
+<!-- ── Модальное окно ─────────────────── -->
+
+</body>
+</html>

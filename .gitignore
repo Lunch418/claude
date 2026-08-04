@@ -1,0 +1,16 @@
+# Секреты и окружение
+.env
+.env.*
+!.env.example
+
+# Экспорт и рантайм-артефакты
+/storage/exports/*.csv
+/storage/
+
+# Python
+__pycache__/
+*.pyc
+
+# Прочее
+*.log
+.DS_Store

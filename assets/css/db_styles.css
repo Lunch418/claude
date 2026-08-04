@@ -1,0 +1,1966 @@
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/inter/Inter.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../fonts/inter/JetBrainsMono.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+/* ── ПЕРЕМЕННЫЕ ──────────────────────────────────────────────── */
+:root {
+  /* Акцент */
+  --c-accent:#3d5fa0; --c-accent-h:#2f4d8a;
+  --c-accent-bg:#f0f4fc; --c-accent-border:#c9d6f0;
+  --c-accent-soft:rgba(61,95,160,.09);
+
+  /* Совместимость */
+  --c-blue:var(--c-accent); --c-blue-h:var(--c-accent-h);
+  --c-blue-bg:var(--c-accent-bg); --c-blue-border:var(--c-accent-border);
+
+  /* Нейтральная палитра */
+  --c-bg:#eef0f4;
+  --c-surface:#ffffff;
+  --c-surface-2:#f6f7f9;
+  --c-surface-3:#eff1f4;
+  --c-border:#dfe2e9;
+  --c-border-soft:#e8eaee;
+
+  /* Текст */
+  --c-text:#1c2233; --c-text-2:#6b7488; --c-text-3:#9fa6b8;
+
+  /* Статусы */
+  --c-green:#2a7a56; --c-green-h:#1f6044;
+  --c-green-bg:#f0faf5; --c-green-border:#a8d9c0;
+  --c-red:#b83030; --c-red-bg:#fdf2f2; --c-red-border:#f0b8b8;
+  --c-amber:#a0650a; --c-amber-bg:#fef9eb; --c-amber-border:#f0d97a;
+
+  /* Типографика */
+  --font:'Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Fira Code',monospace;
+
+  /* Геометрия */
+  --r:10px; --r-sm:6px; --r-lg:14px; --r-xl:18px;
+
+  /* Единые высоты контролов */
+  --h-ctrl:30px;      /* toolbar / param inputs */
+  --h-ctrl-lg:42px;   /* login form */
+
+  /* Тени */
+  --sh-xs:0 1px 2px rgba(0,0,0,.03);
+  --sh-sm:0 1px 4px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.03);
+  --sh-md:0 4px 12px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.03);
+  --sh-lg:0 12px 32px rgba(0,0,0,.08),0 2px 8px rgba(0,0,0,.04);
+  --ring:0 0 0 3px rgba(61,95,160,.13);
+}
+
+/* ── ТЁМНАЯ ТЕМА (доступна сразу, в т.ч. на экране входа) ────────
+   Значения дублируют то, что db_settings.js применяет после входа —
+   без этого блока тёмная тема "не срабатывала" бы до авторизации,
+   т.к. модуль настроек грузится только за логином. */
+[data-theme="dark"] {
+  --c-accent:#6d9eff; --c-accent-h:#85afff;
+  --c-accent-bg:#1a2438; --c-accent-border:#2e4166;
+  --c-accent-soft:rgba(109,158,255,.13);
+  --c-blue:var(--c-accent); --c-blue-h:var(--c-accent-h);
+  --c-blue-bg:var(--c-accent-bg); --c-blue-border:var(--c-accent-border);
+
+  --c-bg:#1a1d24;
+  --c-surface:#22262f;
+  --c-surface-2:#282d37;
+  --c-surface-3:#30353f;
+  --c-border:#3a3f4b;
+  --c-border-soft:#31363f;
+
+  --c-text:#eceef4; --c-text-2:#aab2c5; --c-text-3:#727a8c;
+
+  --c-green:#4ec48a; --c-green-h:#5fd199;
+  --c-green-bg:#152a20; --c-green-border:#2a5540;
+  --c-red:#f07a7a; --c-red-bg:#2c1a1a; --c-red-border:#5c3232;
+  --c-amber:#e0ab52; --c-amber-bg:#2a2413; --c-amber-border:#524526;
+
+  --sh-xs:0 1px 2px rgba(0,0,0,.35);
+  --sh-sm:0 1px 4px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.35);
+  --sh-md:0 4px 14px rgba(0,0,0,.45),0 1px 3px rgba(0,0,0,.35);
+  --sh-lg:0 14px 36px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.4);
+  --ring:0 0 0 3px rgba(109,158,255,.22);
+  color-scheme: dark;
+}
+/* хардкод-цвета в таблице — перекрываем для тёмной темы */
+[data-theme="dark"] .data-table thead { background:var(--c-surface-2); }
+[data-theme="dark"] .data-table th { background:var(--c-surface-2); }
+[data-theme="dark"] .data-table tbody tr:nth-child(even) td { background:var(--c-surface-2); }
+[data-theme="dark"] .data-table td { border-bottom-color:var(--c-border-soft); }
+[data-theme="dark"] .data-table tbody tr:hover td { background:var(--c-accent-bg) !important; }
+[data-theme="dark"] #sqlEditorWrap { background:var(--c-surface-2) !important; }
+[data-theme="dark"] img.qr, [data-theme="dark"] .tfa-qr-wrap img { background:#fff; }
+
+/* ── RESET ────────────────────────────────────────────────────── */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0 }
+html,body {
+  height:100%; font-family:var(--font); font-size:13.5px;
+  line-height:1.5; color:var(--c-text); background:var(--c-bg);
+  -webkit-font-smoothing:antialiased;
+}
+body { display:flex; flex-direction:column; overflow:hidden }
+::-webkit-scrollbar { width:5px; height:5px }
+::-webkit-scrollbar-track { background:transparent }
+::-webkit-scrollbar-thumb { background:#d0d5de; border-radius:99px }
+
+/* ── HEADER ──────────────────────────────────────────────────── */
+header {
+  display:flex; align-items:center; gap:14px;
+  padding:0 22px; height:52px;
+  background:var(--c-surface);
+  border-bottom:1px solid var(--c-border);
+  box-shadow:0 1px 0 var(--c-border-soft),var(--sh-xs);
+  flex-shrink:0; z-index:30;
+}
+.logo { display:flex; align-items:center; gap:10px }
+.logo-mark {
+  width:30px; height:30px; border-radius:var(--r-sm);
+  background:linear-gradient(140deg,#4e6daa 0%,#5a4f9e 100%);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 2px 6px rgba(61,95,160,.28); flex-shrink:0;
+}
+.logo-mark svg { color:#fff }
+.logo-name { font-size:14px; font-weight:700; letter-spacing:-.025em; color:var(--c-text) }
+.logo-name span { font-weight:400; color:var(--c-text-3) }
+.h-badge {
+  padding:2px 9px; border-radius:99px;
+  font-family:var(--font-mono); font-size:11px; font-weight:500;
+  background:var(--c-accent-bg); color:var(--c-accent);
+  border:1px solid var(--c-accent-border);
+}
+.h-gap { flex:1 }
+
+/* ── USER BADGE ──────────────────────────────────────────────── */
+.user-badge-wrap { display:none; align-items:center; gap:6px }
+.user-badge-wrap.show { display:flex }
+.user-badge-name {
+  display:flex; align-items:center; gap:6px;
+  padding:4px 10px 4px 8px; border-radius:99px;
+  background:var(--c-surface-2); border:1px solid var(--c-border);
+  font-size:12px; font-weight:600; color:var(--c-text);
+}
+.user-badge-name svg { color:var(--c-text-3) }
+.user-badge-logout {
+  display:flex; align-items:center; justify-content:center;
+  width:28px; height:28px; border-radius:99px;
+  border:1px solid var(--c-border); background:transparent;
+  color:var(--c-text-3); cursor:pointer; transition:all .14s;
+}
+.user-badge-logout:hover {
+  background:var(--c-red-bg); border-color:var(--c-red-border); color:var(--c-red);
+}
+
+/* ── LAYOUT ──────────────────────────────────────────────────── */
+.layout { display:flex; flex:1; overflow:hidden }
+
+/* ── SIDEBAR ─────────────────────────────────────────────────── */
+.sidebar {
+  width:268px; flex-shrink:0;
+  background:var(--c-surface-2); border-right:1px solid var(--c-border);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.sidebar-tabs {
+  display:flex; padding:10px 10px 0; flex-shrink:0;
+  border-bottom:1px solid var(--c-border);
+}
+.sidebar-tab {
+  flex:1; padding:8px 6px 10px; text-align:center;
+  font-size:12.5px; font-weight:500; color:var(--c-text-2);
+  cursor:pointer; border-radius:var(--r-sm) var(--r-sm) 0 0;
+  transition:color .15s,background .15s;
+  border-bottom:2px solid transparent; margin-bottom:-1px; user-select:none;
+}
+.sidebar-tab:hover { color:var(--c-text); background:var(--c-surface-3) }
+.sidebar-tab.active { color:var(--c-accent); font-weight:600; border-bottom-color:var(--c-accent) }
+.sidebar-panel { display:none; flex-direction:column; flex:1; overflow:hidden }
+.sidebar-panel.active { display:flex }
+.sidebar-search { padding:10px 10px 6px; flex-shrink:0 }
+.sb-search {
+  display:flex; align-items:center; gap:8px;
+  background:var(--c-surface); border:1px solid var(--c-border);
+  border-radius:var(--r); padding:6px 10px;
+  transition:border-color .15s,box-shadow .15s;
+}
+.sb-search:focus-within { border-color:var(--c-accent-border); box-shadow:var(--ring) }
+.sb-search svg { color:var(--c-text-3); flex-shrink:0 }
+.sb-search input {
+  flex:1; border:none; background:transparent;
+  font-family:var(--font); font-size:13px; color:var(--c-text); outline:none;
+}
+.sb-search input::placeholder { color:var(--c-text-3) }
+.section-lbl {
+  padding:2px 14px 5px; font-size:10.5px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.07em; color:var(--c-text-3); flex-shrink:0;
+}
+.table-list { overflow-y:auto; flex:1; padding:2px 6px 8px }
+.tbl-item {
+  display:flex; align-items:center; gap:9px;
+  padding:6px 9px; border-radius:var(--r);
+  cursor:pointer;
+  transition: background .12s, border-color .15s, transform .15s, box-shadow .15s;
+  margin-bottom:2px; border:1px solid var(--c-border);
+  background:var(--c-surface);
+}
+.tbl-item.active { background:var(--c-accent-bg); border-color:var(--c-accent-border); }
+.tbl-item.active-flash { animation: active-pulse .55s ease-out; }
+.tbl-icon {
+  width:28px; height:28px; border-radius:var(--r-sm);
+  background:var(--c-surface); border:1px solid var(--c-border);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  transition:background .12s,border-color .12s;
+}
+.tbl-item.active .tbl-icon { background:var(--c-accent); border-color:var(--c-accent-h) }
+.tbl-icon svg { color:#94a3b8; transition:color .12s }
+.tbl-item.active .tbl-icon svg { color:#fff }
+.tbl-names { min-width:0; flex:1 }
+.tbl-name {
+  font-size:12.5px; font-weight:500; color:var(--c-text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.tbl-name.sub {
+  font-size:11px; font-weight:400; color:var(--c-text-3);
+  font-family:var(--font-mono); margin-top:1px;
+}
+.tbl-item.active .tbl-name { color:#1a3ea0 }
+.tbl-item.active .tbl-name.sub { color:#4267cb }
+
+/* Шаблоны — единый стиль с таблицами */
+.tmpl-list {
+  overflow-y:auto; flex:1; padding:2px 6px 8px;
+}
+.tmpl-section-hdr {
+  padding:8px 9px 3px; font-size:10.5px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.07em; color:var(--c-text-3); flex-shrink:0;
+}
+.tmpl-card {
+  display:flex; flex-direction:column;
+  padding:6px 9px; border-radius:var(--r);
+  cursor:pointer; transition:background .1s, border-color .15s;
+  margin-bottom:2px; border:1px solid var(--c-border);
+  background:var(--c-surface);
+}
+.tmpl-card:hover { background:var(--c-surface) }
+.tmpl-card:active { background:var(--c-accent-soft) }
+.tmpl-card.active-tmpl { background:var(--c-accent-bg); border-color:var(--c-accent-border) }
+.tmpl-title { font-size:12.5px; font-weight:500; color:var(--c-text) }
+.tmpl-card.active-tmpl .tmpl-title { color:var(--c-accent) }
+.tmpl-card.active-tmpl .tmpl-desc  { color:var(--c-accent-h) }
+.tmpl-desc { font-size:11px; color:var(--c-text-3); line-height:1.4; margin-top:1px }
+/* Тяжёлый запрос */
+.tmpl-card-danger .tmpl-title { color:#7a2020 }
+.tmpl-card-danger .tmpl-desc  { color:#a05050 }
+.tmpl-danger-badge {
+  display:inline-block; margin-left:7px; padding:1px 7px;
+  border-radius:99px; font-size:10.5px; font-weight:600;
+  background:#fce8e8; color:var(--c-red); border:1px solid #f0b8b8;
+  vertical-align:middle; letter-spacing:.01em;
+}
+.login-admin-badge {
+  display:inline-block; margin-left:4px; padding:1px 6px;
+  border-radius:3px; font-size:10px; font-weight:700;
+  background:var(--c-accent-bg); color:var(--c-accent);
+  border:1px solid var(--c-accent-border); letter-spacing:.02em;
+}
+
+/* ── MAIN / TOOLBAR ──────────────────────────────────────────── */
+.main { flex:1; display:flex; flex-direction:column; overflow:hidden }
+.toolbar {
+  display:flex; align-items:center; gap:5px;
+  padding:8px 18px;
+  background:var(--c-surface); border-bottom:1px solid var(--c-border);
+  flex-wrap:wrap; flex-shrink:0; min-height:48px;
+}
+.toolbar-left { display:flex; align-items:center; gap:5px; flex:1; flex-wrap:wrap; min-width:0 }
+.toolbar-right { display:flex; align-items:center; gap:5px; flex-shrink:0 }
+.toolbar-title {
+  font-size:13.5px; font-weight:700; letter-spacing:-.02em;
+  color:var(--c-text); white-space:nowrap; margin-right:2px;
+  max-width:280px; overflow:hidden; text-overflow:ellipsis;
+}
+.toolbar-filters { display:flex; align-items:center; gap:5px; flex-wrap:wrap }
+.toolbar-filters.hidden { display:none !important }
+.filter-group { display:flex; align-items:center; gap:5px }
+.filter-label {
+  font-size:12px; font-weight:500; color:var(--c-text-3); white-space:nowrap;
+}
+.date-hint {
+  font-size:11px; color:var(--c-amber); font-weight:500;
+  padding:2px 8px; background:var(--c-amber-bg);
+  border-radius:4px; border:1px solid var(--c-amber-border); display:none;
+}
+.date-hint.show { display:inline-block }
+.sep-v { width:1px; height:18px; background:var(--c-border); flex-shrink:0; margin:0 3px }
+
+/* ── ЕДИНЫЕ КОНТРОЛЫ ─────────────────────────────────────────── */
+input[type=text],
+input[type=date],
+input[type=number],
+input[type=password],
+select {
+  height:var(--h-ctrl);
+  background:var(--c-surface); border:1px solid var(--c-border);
+  border-radius:var(--r-sm); color:var(--c-text);
+  font-family:var(--font); font-size:13px;
+  padding:0 9px; outline:none;
+  transition:border-color .15s,box-shadow .15s;
+  box-shadow:var(--sh-xs);
+}
+input:focus, select:focus {
+  border-color:var(--c-accent-border); box-shadow:var(--ring);
+}
+input::placeholder { color:var(--c-text-3) }
+input[type=date] { padding:0 6px; cursor:pointer }
+select { cursor:pointer }
+
+/* Кнопки */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:5px;
+  padding:0 13px; height:var(--h-ctrl);
+  border-radius:var(--r-sm); font-family:var(--font);
+  font-size:12.5px; font-weight:600; cursor:pointer; border:none;
+  transition:all .13s; white-space:nowrap; letter-spacing:-.01em;
+}
+.btn:disabled { opacity:.42; cursor:not-allowed !important; transform:none !important }
+.btn:active:not(:disabled) { transform:translateY(0) !important }
+.btn-primary {
+  background:var(--c-accent); color:#fff;
+  box-shadow:0 1px 3px rgba(61,95,160,.32),inset 0 1px 0 rgba(255,255,255,.08);
+}
+.btn-primary:hover:not(:disabled) { background:var(--c-accent-h); transform:translateY(-1px) }
+.btn-success {
+  background:var(--c-green); color:#fff;
+  box-shadow:0 1px 3px rgba(42,122,86,.28),inset 0 1px 0 rgba(255,255,255,.08);
+}
+.btn-success:hover:not(:disabled) { background:var(--c-green-h); transform:translateY(-1px) }
+/* Кнопка CSV — персонализация: следует акцентному цвету темы,
+   а не жёстко зелёному (в отличие от прочих success-кнопок). */
+#btnCsv { background:var(--c-accent); box-shadow:0 1px 3px var(--c-accent-border),inset 0 1px 0 rgba(255,255,255,.08); }
+#btnCsv:hover:not(:disabled) { background:var(--c-accent-h); transform:translateY(-1px) }
+.btn-outline {
+  background:var(--c-surface); border:1px solid var(--c-border);
+  color:#475569; box-shadow:var(--sh-xs);
+}
+.btn-outline:hover:not(:disabled) { background:var(--c-surface-2); border-color:#c8cdd8; color:var(--c-text) }
+.btn-ghost { background:transparent; color:var(--c-text-2) }
+.btn-ghost:hover:not(:disabled) { background:var(--c-surface-2); color:var(--c-text) }
+.btn-danger { background:var(--c-red); color:#fff }
+.btn-danger:hover:not(:disabled) { background:#9e2626; transform:translateY(-1px) }
+
+/* ── PARAM PANEL ─────────────────────────────────────────────── */
+.param-panel {
+  background:var(--c-accent-bg);
+  border-bottom:2px solid var(--c-accent-border);
+  padding:11px 18px 14px; flex-shrink:0;
+  box-shadow:0 2px 8px rgba(61,95,160,.05);
+}
+.param-header {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:12px; gap:12px;
+}
+.param-header-left {
+  display:flex; align-items:center; gap:7px; min-width:0; flex:1;
+}
+.param-pip { width:6px; height:6px; border-radius:50%; background:var(--c-accent); flex-shrink:0 }
+.param-panel-title {
+  font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.08em; color:var(--c-accent); white-space:nowrap;
+}
+.param-template-name {
+  font-size:13px; font-weight:600; color:var(--c-text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.param-actions { display:flex; align-items:center; gap:5px; flex-shrink:0 }
+.param-actions .btn { height:28px; font-size:12px; padding:0 11px }
+.param-fields {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(155px,1fr));
+  gap:9px 14px; align-items:end;
+}
+.param-field { display:flex; flex-direction:column; gap:4px }
+.param-field label {
+  font-size:11px; font-weight:600; color:var(--c-text-2);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.param-field.req label::after { content:' *'; color:var(--c-red) }
+.param-hint { font-size:10.5px; color:var(--c-text-3); font-style:italic; margin-top:1px }
+/* Инпуты внутри param-field наследуют --h-ctrl */
+.param-field input,
+.param-field select,
+.param-field .org-combo { width:100% !important; box-sizing:border-box }
+.param-field.err input,
+.param-field.err select,
+.param-field.err .org-combo-val {
+  border-color:var(--c-red) !important;
+  box-shadow:0 0 0 3px rgba(184,48,48,.1) !important;
+}
+.param-errors {
+  margin-top:10px; padding:8px 12px;
+  background:var(--c-red-bg); border:1px solid var(--c-red-border);
+  border-radius:var(--r-sm); font-size:12.5px; color:var(--c-red); line-height:1.6;
+}
+
+/* ── ORG COMBOBOX ────────────────────────────────────────────── */
+.org-combo { position:relative; width:100% }
+.org-combo-val {
+  height:var(--h-ctrl); border:1px solid var(--c-border);
+  border-radius:var(--r-sm); padding:0 26px 0 9px;
+  display:flex; align-items:center; cursor:pointer;
+  background:var(--c-surface); font-family:var(--font);
+  font-size:13px; color:var(--c-text);
+  user-select:none; box-shadow:var(--sh-xs); position:relative;
+  transition:border-color .15s,box-shadow .15s;
+  white-space:nowrap; overflow:hidden;
+}
+.org-combo-val:hover { border-color:var(--c-accent-border) }
+.org-combo-val > span:first-child { flex:1; overflow:hidden; text-overflow:ellipsis }
+.org-combo-arrow {
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  color:var(--c-text-3); font-size:10px; pointer-events:none;
+  transition:transform .15s; flex-shrink:0;
+}
+.org-combo.open .org-combo-val { border-color:var(--c-accent-border); box-shadow:var(--ring) }
+.org-combo.open .org-combo-arrow { transform:translateY(-50%) rotate(180deg) }
+.org-combo-drop {
+  display:none; position:absolute; top:calc(100% + 4px); left:0;
+  width:max-content; min-width:100%; max-width:400px;
+  background:var(--c-surface); border:1px solid var(--c-border);
+  border-radius:var(--r); box-shadow:var(--sh-md); z-index:999; overflow:hidden;
+}
+.org-combo.open .org-combo-drop { display:flex; flex-direction:column }
+.org-combo-search {
+  height:34px; border:none; border-bottom:1px solid var(--c-border);
+  padding:0 11px; font-family:var(--font); font-size:13px;
+  color:var(--c-text); outline:none; background:#f9fafc; flex-shrink:0;
+  box-shadow:none;
+}
+.org-combo-search:focus { background:#fff; border-color:var(--c-border) }
+.org-combo-list { max-height:220px; overflow-y:auto }
+.org-combo-opt {
+  padding:7px 12px; cursor:pointer; font-size:12.5px; color:var(--c-text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  transition:background .07s;
+}
+.org-combo-opt:hover, .org-combo-opt.kb { background:var(--c-accent-bg); color:var(--c-accent) }
+.org-combo-opt.sel { font-weight:600; color:var(--c-accent) }
+.org-combo-msg { padding:9px 12px; font-size:12px; color:var(--c-text-3); font-style:italic }
+
+/* Login combo — крупнее */
+.login-field .org-combo-val {
+  height:var(--h-ctrl-lg); font-size:13.5px;
+  border-radius:var(--r); border-width:1.5px;
+}
+.login-field .org-combo-drop { min-width:100%; max-width:100% }
+
+/* ── SQL BAR ─────────────────────────────────────────────────── */
+.sql-bar {
+  display:flex; gap:10px; padding:10px 18px;
+  background:var(--c-surface-2); border-bottom:1px solid var(--c-border);
+  align-items:flex-start; flex-shrink:0;
+  transition:padding .18s;
+}
+.sql-bar.collapsed { padding:6px 18px }
+.sql-bar.collapsed #sqlEditorWrap,
+.sql-bar.collapsed #sqlBarActions { display:none }
+.sql-wrap { flex:1 }
+.sql-label {
+  display:flex; align-items:center; gap:6px;
+  font-size:10.5px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.07em; color:var(--c-text-3); margin-bottom:5px;
+}
+.sql-bar.collapsed .sql-label { margin-bottom:0 }
+.sql-pip { width:6px; height:6px; border-radius:50%; background:var(--c-amber) }
+.sql-toggle-btn {
+  border:none; background:transparent; cursor:pointer;
+  color:var(--c-text-3); font-size:10px; padding:0 3px;
+  line-height:1; transition:transform .2s,color .15s;
+}
+.sql-toggle-btn:hover { color:var(--c-accent) }
+.sql-bar.collapsed .sql-toggle-btn { transform:rotate(180deg) }
+#sqlEditorWrap {
+  position:relative;
+  background:var(--c-surface-2,#fafbfe); border:1px solid var(--c-border);
+  border-radius:var(--r);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.03);
+  transition:border-color .15s,box-shadow .15s,background .15s;
+}
+#sqlEditorWrap:focus-within {
+  border-color:var(--c-accent-border); background:var(--c-surface,#fff); box-shadow:var(--ring);
+}
+#sqlEditor {
+  position:relative; z-index:1;
+  width:100%; background:transparent; border:none;
+  border-radius:var(--r); color:var(--c-text);
+  font-family:var(--font-mono); font-size:12.5px; line-height:1.65;
+  padding:9px 13px; outline:none; resize:none;
+  min-height:48px; max-height:320px; overflow-y:auto;
+  caret-color:var(--c-accent);
+}
+#sqlEditor::placeholder { color:var(--c-text-3); font-style:italic }
+.sql-actions { display:flex; flex-direction:column; gap:5px; padding-top:20px }
+.sql-actions .btn { width:108px }
+
+/* ── TABLE AREA ──────────────────────────────────────────────── */
+.table-area { flex:1; overflow:auto; padding:14px 18px; background:var(--c-bg) }
+.table-card {
+  background:var(--c-surface); border-radius:var(--r-xl);
+  border:1px solid var(--c-border); box-shadow:var(--sh-sm);
+  overflow:hidden; width:fit-content; min-width:100%;
+}
+.data-table {
+  width:max-content; min-width:100%; border-collapse:collapse;
+  font-family:var(--font-mono); font-size:12.5px;
+}
+.data-table thead { background:#f7f8fa; border-bottom:1px solid var(--c-border) }
+.data-table th {
+  padding:9px 15px; text-align:left;
+  font-family:var(--font); font-size:11px; font-weight:700;
+  color:var(--c-text-2); letter-spacing:.04em; text-transform:uppercase;
+  white-space:nowrap; cursor:pointer; user-select:none;
+  position:sticky; top:0; z-index:2;
+  background:#f7f8fa; border-bottom:1px solid var(--c-border);
+  transition:color .12s;
+}
+.data-table th:hover { color:var(--c-text) }
+.data-table th.sorted { color:var(--c-accent) }
+.data-table tbody tr:nth-child(even) td { background:#fafbfd }
+.data-table tbody tr:hover td { background:var(--c-accent-bg) !important }
+.data-table td {
+  padding:7px 15px; border-bottom:1px solid #eef0f4;
+  color:var(--c-text); white-space:nowrap;
+  max-width:320px; overflow:hidden; text-overflow:ellipsis;
+  transition:background .07s;
+}
+.data-table tbody tr:last-child td { border-bottom:none }
+td.null { color:var(--c-text-3); font-style:italic }
+td.num { color:var(--c-accent); font-weight:500 }
+td.date { color:var(--c-green) }
+td.bool-t { color:var(--c-green); font-weight:600 }
+td.bool-f { color:var(--c-red); font-weight:600 }
+td.fk-cell { position:relative; cursor:pointer }
+td.fk-cell .fk-val {
+  color:var(--c-accent); border-bottom:1px dashed var(--c-accent-border);
+  transition:border-color .12s,color .12s;
+}
+td.fk-cell:hover .fk-val { color:var(--c-accent-h); border-bottom-color:var(--c-accent) }
+td.fk-cell .fk-arrow {
+  display:inline-block; opacity:0; font-size:9px; margin-left:3px;
+  transform:translateX(-4px); transition:opacity .12s,transform .12s; color:var(--c-accent);
+}
+td.fk-cell:hover .fk-arrow { opacity:1; transform:translateX(0) }
+
+/* ── СОСТОЯНИЯ ───────────────────────────────────────────────── */
+.placeholder {
+  display:flex; flex-direction:column; align-items:center;
+  justify-content:center; height:100%; gap:12px;
+  color:var(--c-text-3); font-size:13.5px;
+}
+.placeholder svg { color:#dde1e9 }
+.loading-spinner {
+  width:24px; height:24px;
+  border:2.5px solid #dde1e9; border-top-color:var(--c-accent);
+  border-radius:50%; animation:spin .65s linear infinite;
+}
+@keyframes spin { to { transform:rotate(360deg) } }
+
+/* ── PAGINATION ──────────────────────────────────────────────── */
+.pagination {
+  display:flex; align-items:center; gap:4px;
+  padding:8px 18px; background:var(--c-surface);
+  border-top:1px solid var(--c-border-soft); flex-shrink:0;
+}
+.page-btn {
+  width:28px; height:28px; border-radius:var(--r-sm);
+  border:1px solid var(--c-border); background:var(--c-surface);
+  color:var(--c-text-2); cursor:pointer; font-size:13px;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .13s; box-shadow:var(--sh-xs);
+}
+.page-btn:hover { border-color:var(--c-accent-border); color:var(--c-accent); background:var(--c-accent-bg) }
+.page-btn.active {
+  background:var(--c-accent); border-color:var(--c-accent); color:#fff;
+  box-shadow:0 1px 4px rgba(61,95,160,.28);
+}
+.page-info { font-family:var(--font-mono); font-size:11.5px; color:var(--c-text-3); margin-left:10px }
+
+/* ── STATUSBAR ───────────────────────────────────────────────── */
+.statusbar {
+  display:flex; align-items:center; gap:10px;
+  padding:0 18px; height:30px;
+  background:var(--c-surface-2); border-top:1px solid var(--c-border);
+  flex-shrink:0; font-size:12px; color:var(--c-text-2);
+}
+.tag {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:1px 8px; border-radius:99px; font-size:11px; font-weight:600;
+}
+.tag-ok { background:var(--c-green-bg); color:var(--c-green); border:1px solid var(--c-green-border) }
+.tag-err { background:var(--c-red-bg); color:var(--c-red); border:1px solid var(--c-red-border) }
+.tag-loading { background:var(--c-accent-bg); color:var(--c-accent); border:1px solid var(--c-accent-border) }
+.statusbar-search {
+  display:flex; align-items:center; gap:5px;
+  padding:0 8px; height:20px;
+  background:var(--c-surface); border:1px solid var(--c-border);
+  border-radius:99px; transition:border-color .15s,box-shadow .15s; margin-right:8px;
+}
+.statusbar-search:focus-within { border-color:var(--c-accent-border); box-shadow:var(--ring) }
+.statusbar-search svg { color:var(--c-text-3); flex-shrink:0 }
+.statusbar-search input {
+  height:18px; border:none; background:transparent; font-family:var(--font);
+  font-size:12px; color:var(--c-text); outline:none; width:155px;
+  box-shadow:none; padding:0;
+}
+
+/* ── MODALS ──────────────────────────────────────────────────── */
+.modal-overlay {
+  display:none; position:fixed; inset:0;
+  background:rgba(15,23,42,.28); backdrop-filter:blur(6px);
+  z-index:200; align-items:center; justify-content:center;
+}
+.modal-overlay.open { display:flex; animation:fadein .15s }
+@keyframes fadein { from { opacity:0 } to { opacity:1 } }
+.modal {
+  background:var(--c-surface); border-radius:var(--r-xl);
+  border:1px solid var(--c-border); box-shadow:var(--sh-lg);
+  padding:26px; width:400px; max-width:92vw;
+  animation:slideup .18s cubic-bezier(.16,1,.3,1);
+}
+@keyframes slideup {
+  from { opacity:0; transform:translateY(10px) scale(.98) }
+  to   { opacity:1; transform:none }
+}
+.modal h3 { font-size:16px; font-weight:700; letter-spacing:-.025em; margin-bottom:8px }
+.modal p { font-size:13px; color:var(--c-text-2); line-height:1.6 }
+.modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:20px }
+
+/* ── LOGIN OVERLAY ───────────────────────────────────────────── */
+.login-overlay {
+  position:fixed; inset:0; overflow:hidden;
+  background:
+    radial-gradient(circle at 18% 22%, var(--c-accent-bg) 0%, transparent 42%),
+    radial-gradient(circle at 82% 28%, var(--c-accent-bg) 0%, transparent 38%),
+    radial-gradient(circle at 50% 88%, var(--c-accent-bg) 0%, transparent 46%),
+    var(--c-bg);
+  background-size: 180% 180%, 180% 180%, 180% 180%, 100% 100%;
+  animation: login-bg-drift 22s ease-in-out infinite;
+  z-index:9999; display:flex; align-items:center; justify-content:center;
+}
+.login-overlay::before {
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background-image: radial-gradient(var(--c-border) 1.2px, transparent 1.2px);
+  background-size: 28px 28px;
+  opacity:.35;
+  mask-image: radial-gradient(ellipse at 50% 45%, #000 0%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 45%, #000 0%, transparent 75%);
+}
+@keyframes login-bg-drift {
+  0%, 100% { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; }
+  50%      { background-position: 20% 15%, 80% 35%, 55% 80%, 0 0; }
+}
+[data-theme="dark"] .login-overlay {
+  background:
+    radial-gradient(circle at 18% 22%, var(--c-accent-border) 0%, transparent 42%),
+    radial-gradient(circle at 82% 28%, var(--c-accent-border) 0%, transparent 38%),
+    radial-gradient(circle at 50% 88%, var(--c-accent-border) 0%, transparent 46%),
+    var(--c-bg);
+  background-size: 180% 180%, 180% 180%, 180% 180%, 100% 100%;
+}
+.login-overlay.hidden { display:none }
+.login-card {
+  background:var(--c-surface); border:1px solid var(--c-border);
+  border-radius:var(--r-xl);
+  box-shadow:var(--sh-lg),0 0 0 1px rgba(255,255,255,.7);
+  padding:34px 38px; width:420px; max-width:94vw;
+  position:relative; z-index:1;
+}
+.login-logo {
+  display:flex; align-items:center; gap:12px;
+  padding-bottom:18px; border-bottom:1px solid var(--c-border-soft);
+}
+.login-logo-mark {
+  width:38px; height:38px; flex-shrink:0; border-radius:var(--r);
+  background:linear-gradient(140deg,#4e6daa 0%,#5a4f9e 100%);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 2px 8px rgba(61,95,160,.25);
+}
+.login-logo-mark svg { color:#fff }
+.login-title { font-size:17px; font-weight:700; letter-spacing:-.03em }
+.login-subtitle { font-size:12px; color:var(--c-text-2); margin-top:2px }
+.login-field { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; margin-top:18px }
+.login-field label { font-size:12px; font-weight:600; color:var(--c-text-2); letter-spacing:.01em }
+.login-field input {
+  height:var(--h-ctrl-lg) !important; font-size:13.5px !important;
+  border-radius:var(--r) !important; border-width:1.5px !important;
+  width:100%; display:block;
+}
+.login-btn {
+  width:100%; height:var(--h-ctrl-lg); font-size:14px; font-weight:700;
+  margin-top:8px; letter-spacing:-.01em; border-radius:var(--r);
+}
+.login-btn:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 4px 14px rgba(61,95,160,.25) }
+.login-error {
+  padding:10px 13px; background:var(--c-red-bg); border:1px solid var(--c-red-border);
+  border-radius:var(--r-sm); font-size:12.5px; color:var(--c-red);
+  margin-bottom:12px; display:none; line-height:1.4;
+}
+.login-error.show { display:block }
+
+/* ── МИНИМАЛЬНЫЕ РАЗМЕРЫ — защита от поломки при сжатии окна ─── */
+html, body      { min-width: 880px; min-height: 400px; }
+body            { overflow: auto; }
+header          { min-width: 880px; }
+.layout         { min-height: 0; }
+.sidebar        { min-width: 200px; width: 268px; }
+.main           { min-width: 580px; }
+.toolbar        { min-width: 580px; flex-wrap: nowrap; }
+.table-area     { min-height: 200px; }
+
+
+/* Save-query modal — поле ввода */
+#saveQueryModal input[type=text] {
+  height:var(--h-ctrl-lg);
+  border:1px solid var(--c-border);
+  border-radius:var(--r-sm);
+  padding:0 12px;
+  font-size:13.5px;
+  outline:none;
+  transition:border-color .15s,box-shadow .15s;
+}
+#saveQueryModal input[type=text]:focus {
+  border-color:var(--c-accent);
+  box-shadow:var(--ring);
+}
+
+
+#filterId::-webkit-outer-spin-button,
+#filterId::-webkit-inner-spin-button { -webkit-appearance:none; margin:0 }
+#filterId { -moz-appearance:textfield }
+
+.param-field input[type=number]::-webkit-outer-spin-button,
+.param-field input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0 }
+.param-field input[type=number] { -moz-appearance:textfield }
+
+
+.data-table td.fk-cell { cursor:pointer }
+/* ── Избранные шаблоны ──────────────────────────────────────── */
+.tmpl-card { position:relative; }
+
+.tmpl-fav-btn {
+  position:absolute; top:6px; right:7px;
+  background:none; border:none; cursor:pointer;
+  font-size:15px; line-height:1;
+  color:#d1d5db; padding:2px 4px;
+  border-radius:4px;
+  transition:color .2s, transform .2s;
+  z-index:1;
+}
+.tmpl-fav-btn:hover  { color:var(--c-accent-h,#fbbf24); }
+.tmpl-fav-btn.active { color:var(--c-accent,#f59e0b); }
+
+/* Анимация нажатия */
+@keyframes star-pop {
+  0%   { transform:scale(1); }
+  40%  { transform:scale(1.55); }
+  70%  { transform:scale(0.88); }
+  100% { transform:scale(1); }
+}
+.tmpl-fav-btn.pop { animation:star-pop .35s cubic-bezier(.36,.07,.19,.97); }
+
+/* Заголовок группы «Избранное» */
+.tmpl-section-fav {
+  color:var(--c-accent);
+  background:var(--c-accent-bg);
+  border-bottom:1px solid var(--c-accent-border);
+}
+
+/* Сдвиг контента карточки чтобы не перекрывала звезда */
+.tmpl-card .tmpl-title { padding-right:26px; }
+
+
+
+/* ── Строки таблицы — появление ─────────────────────────────── */
+@keyframes row-in {
+  from { opacity:0; transform:translateY(6px); }
+  to   { opacity:1; transform:none; }
+}
+.data-table tbody tr {
+  animation: row-in .18s ease-out both;
+}
+/* Задержка первых 20 строк для эффекта каскада */
+.data-table tbody tr:nth-child(1)  { animation-delay: .00s }
+.data-table tbody tr:nth-child(2)  { animation-delay: .02s }
+.data-table tbody tr:nth-child(3)  { animation-delay: .04s }
+.data-table tbody tr:nth-child(4)  { animation-delay: .06s }
+.data-table tbody tr:nth-child(5)  { animation-delay: .08s }
+.data-table tbody tr:nth-child(6)  { animation-delay: .10s }
+.data-table tbody tr:nth-child(7)  { animation-delay: .12s }
+.data-table tbody tr:nth-child(8)  { animation-delay: .13s }
+.data-table tbody tr:nth-child(9)  { animation-delay: .14s }
+.data-table tbody tr:nth-child(10) { animation-delay: .15s }
+
+/* ── Карточки шаблонов — hover-lift ─────────────────────────── */
+.tmpl-card {
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.tmpl-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(61,95,160,.13);
+}
+
+/* ── Sidebar items — плавный hover ───────────────────────────── */
+.tbl-item {
+  transition: background .12s, transform .12s, box-shadow .15s, border-color .15s;
+}
+.tbl-item:hover {
+  background:var(--c-surface-2);
+  transform:translateY(-2px);
+  box-shadow:0 4px 12px rgba(0,0,0,.06);
+}
+.tbl-item.active:hover {
+  transform:translateY(-2px);
+  box-shadow:0 4px 14px rgba(78,109,170,.18);
+}
+
+/* ── Пагинация — кнопки ─────────────────────────────────────── */
+.page-btn {
+  transition: background .12s, transform .1s;
+}
+.page-btn:active:not(:disabled) { transform: scale(.93); }
+
+/* ── Toast — улучшенная анимация ──────────────────────────────── */
+@keyframes toast-in {
+  from { opacity:0; transform:translateX(24px) scale(.95); }
+  to   { opacity:1; transform:none; }
+}
+@keyframes toast-out {
+  from { opacity:1; transform:none; }
+  to   { opacity:0; transform:translateX(24px) scale(.95); }
+}
+.toast { animation: toast-in .22s cubic-bezier(.16,1,.3,1) both; }
+.toast.hiding { animation: toast-out .2s ease-in forwards; }
+
+/* ── Звезда-частицы (burst) ──────────────────────────────────── */
+.star-burst-particle {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  will-change: transform, opacity;
+}
+/* Главная звезда — pop при активации */
+@keyframes star-activate {
+  0%   { transform: scale(1) rotate(0deg);   color: #d1d5db; }
+  30%  { transform: scale(1.8) rotate(-15deg); color: #fbbf24; }
+  55%  { transform: scale(0.85) rotate(10deg); color: #f59e0b; }
+  80%  { transform: scale(1.15) rotate(-5deg); color: #f59e0b; }
+  100% { transform: scale(1) rotate(0deg);   color: #f59e0b; }
+}
+@keyframes star-deactivate {
+  0%   { transform: scale(1);   }
+  40%  { transform: scale(1.3); }
+  100% { transform: scale(1);   color:#d1d5db; }
+}
+.tmpl-fav-btn.animating-on  { animation: star-activate  .45s cubic-bezier(.36,.07,.19,.97) forwards; }
+.tmpl-fav-btn.animating-off { animation: star-deactivate .3s ease forwards; }
+
+/* ── Область данных — fade при новых данных ──────────────────── */
+@keyframes table-area-in {
+  from { opacity: .4; }
+  to   { opacity: 1; }
+}
+.table-area-loaded { animation: table-area-in .25s ease both; }
+
+/* ── Параметры шаблона — slide down ─────────────────────────── */
+@keyframes param-panel-in {
+  from { opacity:0; transform:translateY(-8px); max-height:0; }
+  to   { opacity:1; transform:none; max-height:300px; }
+}
+#paramPanel[style*="display: block"],
+#paramPanel:not([style*="display: none"]) {
+  animation: param-panel-in .22s cubic-bezier(.16,1,.3,1);
+}
+
+/* ── Статусбар — цветной переход ─────────────────────────────── */
+#statusTag { transition: background .2s, color .2s; }
+
+/* ── Звезда избранных таблиц ─────────────────────────────────── */
+.tbl-item { position:relative; padding-right:28px; }
+.tbl-fav-btn {
+  position:absolute; right:6px; top:50%; transform:translateY(-50%);
+  background:none; border:none; cursor:pointer;
+  font-size:13px; color:#d1d5db; padding:2px 3px;
+  border-radius:3px; line-height:1;
+  opacity:0; transition:opacity .15s, color .2s;
+}
+.tbl-item:hover .tbl-fav-btn,
+.tbl-fav-btn.active { opacity:1; }
+.tbl-fav-btn.active { color:#f59e0b; }
+.tbl-fav-btn:hover  { color:#fbbf24; }
+.tbl-fav-btn.animating-on  { animation: star-activate  .45s cubic-bezier(.36,.07,.19,.97) forwards; }
+.tbl-fav-btn.animating-off { animation: star-deactivate .3s ease forwards; }
+
+
+/* ── CSV / Excel — стрелка вниз "вылетает" при hover ────────── */
+#btnCsv:hover svg, #btnExcel:hover svg {
+  animation: arrow-bounce-down .5s ease;
+}
+@keyframes arrow-bounce-down {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(3px); }
+}
+
+/* ── Сброс — крутится при hover ─────────────────────────────── */
+#btnReset:hover svg {
+  animation: spin-once .5s ease-out;
+}
+@keyframes spin-once {
+  from { transform: rotate(0); }
+  to   { transform: rotate(-360deg); }
+}
+
+/* ── Обновить — крутится при hover (плавно) ─────────────────── */
+#btnClearCache:hover svg {
+  animation: spin-once .6s ease-out;
+}
+
+/* ── Колонки — лёгкое раскрытие ─────────────────────────────── */
+#btnColumns:hover svg {
+  animation: columns-pulse .4s ease;
+}
+@keyframes columns-pulse {
+  0%, 100% { transform: scaleX(1); }
+  50%      { transform: scaleX(1.15); }
+}
+
+/* ── Сохранить — лёгкая «пульсация» ─────────────────────────── */
+#btnSaveQuery:hover svg {
+  animation: save-pulse .5s ease;
+}
+@keyframes save-pulse {
+  0%, 100% { transform: scale(1); }
+  40%      { transform: scale(1.1) translateY(-1px); }
+}
+
+/* ── Очистить (SQL) — иконка крестика дрожит ─────────────────── */
+#btnClearSql:hover {
+  animation: shake-x .3s ease;
+}
+@keyframes shake-x {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-2px); }
+  75%      { transform: translateX(2px); }
+}
+
+/* ── Загрузить (треугольник play) — выезжает вправо ─────────── */
+#btnLoad:hover svg, #btnRunSql:hover svg, #btnRunTemplate:hover svg {
+  animation: play-shift .35s ease;
+}
+@keyframes play-shift {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(2px); }
+}
+
+/* ── Назад — стрелка движется влево ─────────────────────────── */
+#btnBack:hover svg {
+  animation: back-shift .35s ease;
+}
+@keyframes back-shift {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(-3px); }
+}
+
+/* ── Бейджи в шапке (счётчики, FK, История) — лёгкий lift ───── */
+.h-badge:not(.user-badge-name):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0,0,0,.08);
+  transition: transform .15s, box-shadow .15s, background .15s;
+}
+
+
+
+/* ── FK badge — лёгкая пульсация при hover ──────────────────── */
+#fkBadge:hover {
+  animation: fk-glow .5s ease;
+}
+@keyframes fk-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(42,122,86,.2); }
+  50%      { box-shadow: 0 0 0 6px rgba(42,122,86,0); }
+}
+
+/* ── Logout — кнопка слегка двигается вправо ────────────────── */
+.user-badge-logout:hover svg {
+  animation: logout-shift .35s ease;
+}
+@keyframes logout-shift {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(3px); }
+}
+
+/* ── Date input — мягкая подсветка при hover ─────────────────── */
+input[type="date"]:hover {
+  border-color: var(--c-accent-border);
+  box-shadow: 0 0 0 3px var(--c-accent-bg);
+  transition: border-color .15s, box-shadow .2s;
+}
+input[type="date"]:focus {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px var(--c-accent-soft);
+}
+
+/* ── Date picker icon (Chrome) — пульсирует при hover ─────────── */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  transition: opacity .2s, transform .2s;
+  opacity: 0.55;
+  filter: invert(35%);
+}
+input[type="date"]:hover::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  transform: scale(1.15);
+  filter: invert(35%) sepia(60%) saturate(700%) hue-rotate(200deg);
+}
+
+/* ── Sidebar tabs — slide hover ─────────────────────────────── */
+.sidebar-tab:not(.active):hover {
+  background: var(--c-accent-soft);
+  color: var(--c-accent);
+  transition: background .15s, color .15s;
+}
+
+/* ── Все кнопки — лёгкий active scale ────────────────────────── */
+.btn:active:not(:disabled) {
+  transform: scale(.96);
+  transition: transform .08s;
+}
+
+/* ── Param fields — input анимация при focus ───────────────────── */
+.filter-group input:focus,
+.filter-group select:focus {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px var(--c-accent-soft);
+  transition: border-color .15s, box-shadow .2s;
+}
+
+
+/* ── Лупа поиска — увеличивается при focus поля ──────────────── */
+.sb-search:focus-within svg,
+.statusbar-search:focus-within svg {
+  animation: search-zoom .45s cubic-bezier(.36,.07,.19,.97);
+  color: var(--c-accent);
+}
+@keyframes search-zoom {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.3) rotate(-12deg); }
+}
+.sb-search svg, .statusbar-search svg {
+  transition: color .2s;
+}
+
+/* ── Бейдж счётчика таблиц (263 ТАБЛИЦЫ) — hover lift ────────── */
+#tblCountBadge:hover {
+  background: var(--c-accent-bg);
+  color: var(--c-accent);
+  border-color: var(--c-accent-border);
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+
+/* ── История часы — стрелки крутятся при hover ──────────────── */
+#btnHistory:hover svg polyline {
+  animation: clock-tick 1.2s ease-in-out;
+  transform-origin: 12px 12px;
+}
+@keyframes clock-tick {
+  0%   { transform: rotate(0); }
+  25%  { transform: rotate(90deg); }
+  50%  { transform: rotate(180deg); }
+  75%  { transform: rotate(270deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ── Кнопка «Очистить» в модале истории — метла ──────────────── */
+#btnClearHistory:hover {
+  animation: broom .4s ease;
+}
+@keyframes broom {
+  0%, 100% { transform: rotate(0); }
+  25%      { transform: rotate(-3deg) translateX(-2px); }
+  75%      { transform: rotate(3deg) translateX(2px); }
+}
+
+/* ── Звезда избранного — медленное свечение когда активна ───── */
+.tmpl-fav-btn.active,
+.tbl-fav-btn.active {
+  filter: drop-shadow(0 0 3px rgba(245, 158, 11, .4));
+}
+
+/* ── Активная вкладка таблицы — pulse при выборе ────────────── */
+@keyframes active-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(78, 109, 170, .35); }
+  60%  { box-shadow: 0 0 0 6px rgba(78, 109, 170, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(78, 109, 170, 0); }
+}
+.tmpl-card.active-tmpl {
+  animation: active-pulse .55s ease-out;
+}
+
+/* ── Saved queries — pulse при загрузке ─────────────────────── */
+.saved-card.loaded-flash {
+  animation: card-flash .8s ease-out;
+}
+@keyframes card-flash {
+  0%   { background: var(--c-accent-bg); }
+  100% { background: var(--c-surface); }
+}
+
+/* ── Кнопка-категория шаблонов (.tmpl-section-hdr) — fade slide */
+.tmpl-section-hdr,
+.section-lbl {
+  animation: section-slide .25s ease-out both;
+}
+@keyframes section-slide {
+  from { opacity:0; transform:translateX(-4px); }
+  to   { opacity:1; transform:none; }
+}
+
+/* ── Pagination кнопки — нажатие "ныряет" ────────────────────── */
+.page-btn:hover:not(:disabled) {
+  background: var(--c-accent-bg);
+  color: var(--c-accent);
+  transform: translateY(-1px);
+  transition: transform .12s, background .15s, color .15s;
+}
+
+/* ── SQL-редактор — focus glow ──────────────────────────────── */
+#sqlEditor:focus {
+  border-color: var(--c-accent) !important;
+  box-shadow: 0 0 0 3px var(--c-accent-soft);
+}
+
+/* ── Чекбокс колонок — pulse при клике ─────────────────────── */
+.col-drop-item input[type=checkbox]:checked {
+  animation: check-pop .25s ease;
+}
+@keyframes check-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+/* ── Sidebar tab — содержимое плавно меняется ───────────────── */
+.sidebar-panel.active {
+  animation: panel-in .25s ease-out;
+}
+@keyframes panel-in {
+  from { opacity:0; transform:translateY(4px); }
+  to   { opacity:1; transform:none; }
+}
+
+/* ── Login button — мягкий glow при hover ───────────────────── */
+.login-btn:hover {
+  box-shadow: 0 6px 20px rgba(78, 109, 170, .25);
+  transform: translateY(-1px);
+}
+
+/* ── Filter input — pulse при focus ─────────────────────────── */
+#filterText:focus {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px var(--c-accent-soft);
+}
+
+/* ── Параметр type=date — picker indicator анимация ─────────── */
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  animation: calendar-bounce .4s ease;
+}
+@keyframes calendar-bounce {
+  0%, 100% { transform: scale(1.15); }
+  50%      { transform: scale(1.35) rotate(8deg); }
+}
+
+/* ── ВСЕ input/select — единая подсветка при focus ──────────── */
+input[type="text"],
+input[type="number"],
+input[type="search"],
+input[type="password"],
+select,
+textarea {
+  transition: border-color .15s, box-shadow .2s, background .15s;
+}
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+input[type="password"]:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--c-accent) !important;
+  box-shadow: 0 0 0 3px var(--c-accent-soft);
+  outline: none;
+}
+
+/* ── ID input + Дата + Лимит — лёгкий hover ──────────────────── */
+#filterId:hover,
+#filterDateFrom:hover,
+#filterDateTo:hover,
+#limitSelect:hover {
+  border-color: var(--c-accent-border);
+}
+
+/* ── Параметры шаблона: input при focus — pulse рамки ────────── */
+.param-fields input:focus,
+.param-fields select:focus {
+  animation: input-pulse .5s ease-out;
+}
+@keyframes input-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--c-accent-soft); }
+  60%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 3px var(--c-accent-soft); }
+}
+
+/* ── Кнопка "Сбросить параметры" (↺) — крутится ───────────────── */
+#btnResetParams:hover {
+  animation: spin-reverse .5s ease-out;
+}
+@keyframes spin-reverse {
+  from { transform: rotate(0); }
+  to   { transform: rotate(-360deg); }
+}
+
+/* ── Кнопка "Закрыть параметры" (✕) — поворот при hover ──────── */
+#btnCloseParams:hover,
+#btnCloseFk:hover,
+#btnCloseHistory:hover,
+#btnCloseTblModal:hover {
+  animation: rotate-90 .25s ease-out forwards;
+  color: var(--c-red) !important;
+}
+@keyframes rotate-90 {
+  from { transform: rotate(0); }
+  to   { transform: rotate(90deg); }
+}
+
+/* ── Аватар пользователя в шапке — hover scale ──────────────── */
+.user-badge-name:hover svg {
+  animation: user-bounce .5s ease;
+  color: var(--c-accent);
+}
+@keyframes user-bounce {
+  0%, 100% { transform: scale(1); }
+  40%      { transform: scale(1.2) translateY(-1px); }
+}
+.user-badge-name svg {
+  transition: color .2s;
+}
+
+/* ── Logout bg — мягко краснеет при hover ────────────────────── */
+.user-badge-logout:hover {
+  background: var(--c-red-bg);
+  color: var(--c-red);
+}
+.user-badge-logout {
+  transition: background .15s, color .15s;
+  border-radius: var(--r-sm);
+}
+
+/* ── Status tag «OK» внизу — pulse при появлении ─────────────── */
+#statusTag {
+  transition: background .2s, color .2s, transform .15s;
+}
+#statusTag.tag-ok {
+  animation: status-pop .4s cubic-bezier(.16,1,.3,1);
+  background: var(--c-accent-bg) !important;
+  color: var(--c-accent) !important;
+  border-color: var(--c-accent-border) !important;
+}
+@keyframes status-pop {
+  0%   { transform: scale(.7); opacity: 0; }
+  50%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+#statusTag.tag-error {
+  animation: status-shake .4s ease;
+}
+@keyframes status-shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-3px); }
+  75%      { transform: translateX(3px); }
+}
+
+/* ── История запросов — карточка hover ──────────────────────── */
+#historyList .tmpl-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.06);
+}
+
+/* ── Модал редактирования сохранённого — textarea focus ──────── */
+#editSavedSql:focus {
+  border-color: var(--c-accent) !important;
+  box-shadow: 0 0 0 3px var(--c-accent-soft);
+}
+
+/* ── Save query модал — input focus glow ──────────────────────── */
+#saveQueryName:focus,
+#editSavedName:focus {
+  border-color: var(--c-accent) !important;
+  box-shadow: 0 0 0 3px var(--c-accent-soft);
+}
+
+/* ── Radio кнопки экспорта — hover на label ─────────────────── */
+#exportOptCurrentLabel:hover,
+#exportOptAllLabel:hover {
+  border-color: var(--c-accent-border) !important;
+  background: var(--c-accent-soft);
+}
+
+/* ── SVG в кнопках — единая плавность ───────────────────────── */
+.btn svg, .h-badge svg {
+  transition: transform .2s;
+}
+
+/* ── Шапка целиком — gradient pulse при первой загрузке ──────── */
+header {
+  animation: header-fadein .35s ease-out;
+}
+@keyframes header-fadein {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Sidebar в целом — slide справа налево ───────────────────── */
+.sidebar {
+  animation: sidebar-in .35s ease-out;
+}
+@keyframes sidebar-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Main area — fade-in после sidebar ──────────────────────── */
+.main {
+  animation: main-in .4s ease-out .1s both;
+}
+@keyframes main-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Toolbar — slide сверху ─────────────────────────────────── */
+.toolbar {
+  animation: toolbar-in .35s ease-out;
+}
+@keyframes toolbar-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Бейджи лимита (50/100/Все...) при изменении ─────────────── */
+#limitSelect:focus + * {
+  border-color: var(--c-accent);
+}
+
+/* ── Loading spinner — ускоряем когда есть данные ─────────────── */
+.loading-spinner {
+  animation-duration: .8s;
+}
+
+/* ── Active row data-table — лёгкое выделение ───────────────── */
+.data-table tbody tr:hover {
+  background: var(--c-accent-soft) !important;
+  transition: background .12s;
+}
+
+/* ── Заголовки столбцов — hover ─────────────────────────────── */
+.data-table thead th:hover {
+  background: var(--c-accent-bg);
+  color: var(--c-accent);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+
+/* ── Бейдж "Найдено" в модалах — счётчик ─────────────────────── */
+#fkCountBadge, #tblModalCount, #historyCount {
+  display: inline-block;
+  transition: transform .2s;
+}
+#fkCountBadge.bump, #tblModalCount.bump, #historyCount.bump {
+  animation: counter-bump .35s ease;
+}
+@keyframes counter-bump {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.25); color: var(--c-accent); }
+}
+
+/* ── Иконка лупы — болтается + увеличивается при focus ─────── */
+.sb-search:focus-within svg {
+  animation: search-wobble .6s ease;
+}
+@keyframes search-wobble {
+  0%   { transform: scale(1) rotate(0); }
+  20%  { transform: scale(1.3) rotate(-15deg); }
+  40%  { transform: scale(1.25) rotate(10deg); }
+  60%  { transform: scale(1.3) rotate(-5deg); }
+  80%  { transform: scale(1.2) rotate(3deg); }
+  100% { transform: scale(1.15) rotate(0); }
+}
+
+/* ── Звезда избранного — когда удаляешь shake потом улетает ─── */
+.tmpl-fav-btn.shake-bye,
+.tbl-fav-btn.shake-bye {
+  animation: star-bye .5s ease forwards;
+}
+@keyframes star-bye {
+  0%   { transform: scale(1) rotate(0); opacity: 1; }
+  30%  { transform: scale(1.4) rotate(-20deg); }
+  60%  { transform: scale(.7) rotate(15deg); opacity: .6; }
+  100% { transform: scale(0) rotate(180deg); opacity: 0; }
+}
+
+/* ── Карточки сохранённых запросов — hover lift ─────────────── */
+.saved-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.06);
+}
+
+/* ── Login overlay — fadein с blur ──────────────────────────── */
+.login-overlay {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.login-card {
+  animation: login-pop .5s cubic-bezier(.16,1,.3,1);
+}
+@keyframes login-pop {
+  from { opacity:0; transform:translateY(20px) scale(.94); }
+  to   { opacity:1; transform:none; }
+}
+
+/* ── Login инпуты при focus — синее свечение ────────────────── */
+.login-card input:focus {
+  border-color: var(--c-accent) !important;
+  box-shadow: 0 0 0 4px var(--c-accent-soft);
+}
+
+/* ── Login button — gradient pulse ──────────────────────────── */
+.login-btn:hover {
+  animation: btn-glow 1.2s ease-in-out infinite;
+}
+@keyframes btn-glow {
+  0%, 100% { box-shadow: 0 6px 16px rgba(78,109,170,.25); }
+  50%      { box-shadow: 0 6px 28px rgba(78,109,170,.45); }
+}
+
+/* ── Login logo — крутится при наведении ────────────────────── */
+.login-logo-mark:hover {
+  animation: logo-spin .8s cubic-bezier(.16,1,.3,1);
+}
+@keyframes logo-spin {
+  from { transform: rotate(0); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Строки таблицы данных — мягкое выделение ─────────────── */
+.data-table tbody tr {
+  transition: background .12s;
+}
+
+/* ── ID, Дата, Limit — float-up label при focus ─────────────── */
+.filter-label {
+  transition: color .15s, transform .15s;
+}
+.filter-group:focus-within .filter-label {
+  color: var(--c-accent);
+  transform: translateY(-1px);
+  font-weight: 600;
+}
+
+/* ── Пустая история — sad icon dance ────────────────────────── */
+.hist-empty svg {
+  animation: empty-float 2.5s ease-in-out infinite;
+}
+@keyframes empty-float {
+  0%, 100% { transform: translateY(0); opacity: .5; }
+  50%      { transform: translateY(-4px); opacity: .8; }
+}
+
+/* ── Placeholder когда пусто (нет данных, нет таблицы) ──────── */
+.placeholder svg {
+  animation: placeholder-pulse 3s ease-in-out infinite;
+}
+@keyframes placeholder-pulse {
+  0%, 100% { opacity: .4; transform: scale(1); }
+  50%      { opacity: .65; transform: scale(1.05); }
+}
+
+/* ── Saved queries pulse при загрузке в редактор ─────────────── */
+.saved-card.flash-load {
+  animation: card-flash-blue .6s ease-out;
+}
+@keyframes card-flash-blue {
+  0%   { background: var(--c-accent-bg); transform: scale(1.02); }
+  100% { background: var(--c-surface); transform: scale(1); }
+}
+
+/* ── Sidebar tab при клике — bump ───────────────────────────── */
+.sidebar-tab:active {
+  transform: scale(.96);
+}
+
+/* ── Login error message — shake + fade ─────────────────────── */
+.login-error:not(:empty) {
+  animation: error-shake .5s ease;
+}
+@keyframes error-shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
+  20%, 40%, 60%, 80%      { transform: translateX(3px); }
+}
+
+/* ── Иконка глаза в пароле — moonwalk ───────────────────────── */
+#btnTogglePass:hover svg {
+  animation: eye-blink .4s ease;
+}
+@keyframes eye-blink {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scaleY(.3); }
+}
+
+/* ── ID input иконка # перед — украшение ─────────────────────── */
+.filter-group:has(#filterId):focus-within {
+  background: var(--c-accent-soft);
+  border-radius: var(--r-sm);
+  padding: 1px 4px;
+  margin: -1px -4px;
+  transition: background .2s;
+}
+
+/* ── Limit select — стрелка крутится ────────────────────────── */
+#limitSelect:focus {
+  border-color: var(--c-accent);
+}
+
+/* ── Все кнопки шапки — entrance ─────────────────────────────── */
+header > *:not(#fkBadge) {
+  animation: header-item-in .35s ease-out both;
+}
+#fkBadge {
+  animation: none;
+  transition: opacity .25s, transform .2s;
+}
+header > *:nth-child(1) { animation-delay: 0s; }
+header > *:nth-child(2) { animation-delay: .04s; }
+header > *:nth-child(3) { animation-delay: .08s; }
+header > *:nth-child(4) { animation-delay: .12s; }
+header > *:nth-child(5) { animation-delay: .16s; }
+header > *:nth-child(6) { animation-delay: .20s; }
+@keyframes header-item-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Бейдж количество строк (50 строк · 0.39s) — fade in ─────── */
+#rowCount, #queryTime {
+  animation: count-fade .3s ease-out;
+}
+@keyframes count-fade {
+  from { opacity: 0; transform: translateX(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Чекбоксы радио в экспорте — выбор check pop ─────────────── */
+input[type="radio"]:checked {
+  animation: radio-pop .25s ease;
+}
+@keyframes radio-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
+
+/* ── Sidebar поиск svg — rotate-tilt ────────────────────────── */
+.sb-search input:focus + svg,
+.sb-search:focus-within svg {
+  color: var(--c-accent);
+}
+
+
+/* ── FK badge — мягкий glow при hover (без ::before) ─────────── */
+#fkBadge {
+  transition: background .15s;
+}
+#fkBadge:hover {
+  background: var(--c-green-bg);
+}
+
+/* ── Сохранённые запросы — каскадный вход (как у шаблонов) ───── */
+.saved-card {
+  animation: card-in .18s ease-out both;
+  transition: transform .15s ease, box-shadow .15s ease, background .12s;
+}
+#savedList .saved-card:nth-child(1)  { animation-delay:.00s }
+#savedList .saved-card:nth-child(2)  { animation-delay:.03s }
+#savedList .saved-card:nth-child(3)  { animation-delay:.06s }
+#savedList .saved-card:nth-child(4)  { animation-delay:.09s }
+#savedList .saved-card:nth-child(5)  { animation-delay:.11s }
+#savedList .saved-card:nth-child(6)  { animation-delay:.13s }
+#savedList .saved-card:nth-child(7)  { animation-delay:.15s }
+#savedList .saved-card:nth-child(8)  { animation-delay:.17s }
+
+.saved-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.06);
+}
+
+
+.saved-btn-load:hover {
+  transform: scale(1.25);
+  transition: transform .15s, color .15s;
+}
+.saved-btn-del:hover {
+  animation: shake-x-small .3s ease;
+  color: var(--c-red) !important;
+}
+@keyframes shake-x-small {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-1px); }
+  75%      { transform: translateX(1px); }
+}
+
+
+#historyList .tmpl-card {
+  animation: card-in .18s ease-out both;
+}
+#historyList .tmpl-card:nth-child(1) { animation-delay:.00s }
+#historyList .tmpl-card:nth-child(2) { animation-delay:.03s }
+#historyList .tmpl-card:nth-child(3) { animation-delay:.06s }
+#historyList .tmpl-card:nth-child(4) { animation-delay:.09s }
+#historyList .tmpl-card:nth-child(5) { animation-delay:.11s }
+#historyList .tmpl-card:nth-child(6) { animation-delay:.13s }
+#historyList .tmpl-card:nth-child(7) { animation-delay:.15s }
+#historyList .tmpl-card:nth-child(8) { animation-delay:.17s }
+
+
+.hist-btn-del:hover {
+  animation: shake-x-small .3s ease;
+  color: var(--c-red) !important;
+}
+
+#btnClearHistory:hover {
+  background: var(--c-red-bg);
+  border-color: var(--c-red);
+  color: var(--c-red) !important;
+  transition: background .15s, border-color .15s, color .15s;
+}
+
+#tblCountBadge::before {
+  content: '';
+  display: inline-block;
+  width: 11px; height: 11px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  background-color: currentColor;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M3 9h18M3 15h18M9 3v18M15 3v18'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M3 9h18M3 15h18M9 3v18M15 3v18'/%3E%3C/svg%3E");
+  -webkit-mask-size: contain; mask-size: contain;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  transition: transform .25s, background-color .15s;
+}
+#tblCountBadge:hover::before {
+  animation: grid-zoom .5s ease;
+}
+@keyframes grid-zoom {
+  0%, 100% { transform: scale(1) rotate(0); }
+  50%      { transform: scale(1.2) rotate(90deg); }
+}
+
+
+
+@keyframes fk-spread {
+  0%   { transform: scaleX(1); }
+  40%  { transform: scaleX(1.5); }
+  70%  { transform: scaleX(.85); }
+  100% { transform: scaleX(1); }
+}
+
+/* ── Крестик закрытия ───── */
+.hist-btn-del:hover,
+.saved-btn-del:hover {
+  animation: rotate-90-once .3s ease forwards !important;
+  color: var(--c-red) !important;
+}
+@keyframes rotate-90-once {
+  from { transform: rotate(0); }
+  to   { transform: rotate(90deg); }
+}
+/* ── SQL highlight overlay ───────────────────────────────────── */
+#sqlEditorWrap { position: relative; }
+#sqlHighlight {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.65;
+  padding: 9px 13px;
+  white-space: pre-wrap; word-wrap: break-word;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  color: transparent;
+  z-index: 0;
+  box-sizing: border-box;
+}
+#sqlEditor {
+  position: relative; z-index: 1;
+  background: transparent !important;
+  caret-color: var(--c-accent);
+}
+.sql-kw   { color: var(--c-accent); font-weight: 600; }  /* SELECT FROM WHERE JOIN etc */
+.sql-fn   { color: #7c3aed; }                     /* COUNT SUM AVG COALESCE etc */
+.sql-str  { color: #16a34a; }                     /* строки в кавычках */
+.sql-num  { color: #d97706; }                     /* числа */
+.sql-op   { color: #64748b; }                     /* операторы = < > != */
+.sql-cm   { color: #94a3b8; font-style: italic; } /* комментарии */
+
+/* ── DB switcher dropdown ────────────────────────────────────── */
+#logoWrap { cursor:default; }
+#logoWrap.admin { cursor:pointer; }
+#logoWrap.admin #logoName { border-radius:var(--r-sm); padding:2px 5px; margin:-2px -5px; transition:background .13s; }
+#logoWrap.admin #logoName:hover { background:var(--c-surface-2); }
+.db-switch-item {
+  display:flex; align-items:center; gap:8px;
+  width:100%; padding:7px 12px; border:none; background:transparent;
+  font-size:12.5px; color:var(--c-text); cursor:pointer; text-align:left;
+  transition:background .1s;
+}
+.db-switch-item:hover { background:var(--c-accent-soft); }
+.db-switch-item.active { background:var(--c-accent-bg); color:var(--c-accent); font-weight:500; }
+.db-switch-item svg { flex-shrink:0; color:var(--c-text-3); }
+.db-switch-item.active svg { color:var(--c-accent); }
+
+/* ── GLOBAL QUERY BAR ──────────────────────────────────────────── */
+#globalQueryBar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 9999;
+  background: var(--c-surface);
+  border-top: 1px solid var(--c-border);
+  box-shadow: 0 -4px 24px rgba(0,0,0,.18);
+  animation: gqb-in .22s ease-out;
+}
+@keyframes gqb-in {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+#gqbProgress {
+  height: 2px;
+  background: linear-gradient(90deg, var(--c-accent) 0%, var(--c-accent) 40%, transparent 100%);
+  background-size: 200% 100%;
+  animation: gqb-scan 1.6s linear infinite;
+}
+@keyframes gqb-scan {
+  from { background-position: -100% 0; }
+  to   { background-position: 200% 0; }
+}
+#gqbInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  gap: 12px;
+}
+#gqbLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.gqb-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--c-accent-border);
+  border-top-color: var(--c-accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: gqb-spin .7s linear infinite;
+}
+@keyframes gqb-spin { to { transform: rotate(360deg); } }
+#gqbInfo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+#gqbTimer {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--c-accent);
+  white-space: nowrap;
+  min-width: 42px;
+}
+.gqb-sql {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--c-text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 500px;
+}
+#gqbCancel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  border-radius: var(--r);
+  border: 1px solid var(--c-red-border);
+  background: transparent;
+  color: var(--c-red);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+#gqbCancel:hover {
+  background: var(--c-red-bg, rgba(255,80,80,.08));
+}
+
+/* Отступ когда глобальный бар активен */
+body.query-running .app-layout {
+  padding-bottom: 52px;
+}
+
+/* ── SQL автодополнение (db_sqledit.js) ──────────────────────── */
+#sqlCaretMirror {
+  position: absolute; top: 0; left: -9999px;
+  visibility: hidden; pointer-events: none;
+  white-space: pre-wrap; word-wrap: break-word;
+  box-sizing: border-box;
+}
+#sqlAutocomplete {
+  position: fixed; z-index: 9999;
+  min-width: 180px; max-width: 320px; max-height: 240px;
+  overflow-y: auto;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r);
+  box-shadow: var(--sh-lg);
+  padding: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+#sqlAutocomplete .ac-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px; border-radius: var(--r-sm);
+  cursor: pointer; color: var(--c-text);
+  white-space: nowrap;
+}
+#sqlAutocomplete .ac-item.sel { background: var(--c-accent-bg); }
+#sqlAutocomplete .ac-item:hover { background: var(--c-accent-soft); }
+#sqlAutocomplete .ac-ic {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; flex-shrink: 0;
+  border-radius: 4px; font-size: 10px; font-weight: 600;
+  font-family: var(--font);
+}
+#sqlAutocomplete .ac-kw  { background: rgba(37,99,235,.12);  color: #2563eb; }
+#sqlAutocomplete .ac-fn  { background: rgba(124,58,237,.12); color: #7c3aed; }
+#sqlAutocomplete .ac-tbl { background: rgba(22,163,74,.12);  color: #16a34a; }
+#sqlAutocomplete .ac-col { background: var(--c-surface-3);    color: var(--c-text-2); }
+#sqlAutocomplete .ac-v { overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Подсветка SQL: финальная палитра + прозрачный текст поля ──── */
+/* Текст самой textarea делаем прозрачным — виден только цветной
+   слой подсветки под ним. Каретку оставляем видимой. */
+#sqlEditor {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--c-accent);
+}
+#sqlEditor::selection { background: var(--c-accent-bg); }
+#sqlEditor::placeholder { -webkit-text-fill-color: var(--c-text-3); }
+
+/* ВАЖНО: overlay должен иметь видимый цвет по умолчанию,
+   иначе обычные слова (таблицы, алиасы, *) станут невидимыми.
+   БЕЗ !important — иначе цвета спанов ниже перебиваются. */
+#sqlHighlight          { color: var(--c-text); }
+#sqlHighlight .sql-kw  { color: var(--c-accent) !important; font-weight: 600; }
+#sqlHighlight .sql-fn  { color: #7a3fb0 !important; font-weight: 500; }
+#sqlHighlight .sql-str { color: #1f7a4d !important; }
+#sqlHighlight .sql-num { color: #b5651d !important; }
+#sqlHighlight .sql-op  { color: #8b93a3 !important; }
+#sqlHighlight .sql-cm  { color: #9aa3b2 !important; font-style: italic; }
+
+/* Тёмная тема: те же роли, но яркие тона — читаемо на тёмном фоне */
+[data-theme="dark"] #sqlHighlight .sql-fn  { color: #b98cf0 !important; }
+[data-theme="dark"] #sqlHighlight .sql-str { color: #4ec48a !important; }
+[data-theme="dark"] #sqlHighlight .sql-num { color: #e0ab52 !important; }
+[data-theme="dark"] #sqlHighlight .sql-op  { color: #aab2c5 !important; }
+[data-theme="dark"] #sqlHighlight .sql-cm  { color: #727a8c !important; font-style: italic; }
+
+/* ── appRoot: контейнер тела приложения (вставляется после логина) ──
+   display:contents убирает обёртку из потока разметки, чтобы header
+   и .layout снова были прямыми flex-детьми body — иначе цепочка
+   высот рвётся и статусбар «уезжает» под таблицу. */
+#appRoot { display: contents; }
+
+/* ════════════════════════════════════════════════════════════════
+   Доп. анимации (аддитивно, ничего не ломают)
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Анимированный индикатор активной вкладки ──────────────────── */
+.sidebar-tab { position: relative; }
+.sidebar-tab::after {
+  content: ''; position: absolute; left: 50%; right: 50%; bottom: -1px; height: 2px;
+  background: var(--c-accent); border-radius: 2px;
+  transition: left .26s cubic-bezier(.34,1.4,.5,1), right .26s cubic-bezier(.34,1.4,.5,1);
+}
+.sidebar-tab.active::after { left: 10px; right: 10px; }
+.sidebar-tab.active { border-bottom-color: transparent !important; }
+
+/* ── Крестики закрытия: поворот + краснеют при наведении ───────── */
+button[title="Закрыть"], button[title="Закрыть панель"] {
+  transition: transform .22s cubic-bezier(.34,1.56,.64,1), color .2s !important;
+}
+button[title="Закрыть"]:hover, button[title="Закрыть панель"]:hover {
+  transform: rotate(90deg); color: var(--c-red);
+}
+
+/* ── Универсальное вращение (для иконок "обновить") ────────────── */
+@keyframes spin360 { to { transform: rotate(360deg); } }
+.spin-once { animation: spin360 .6s cubic-bezier(.4,0,.2,1); }
+
+/* ── Кнопка "обновить" в доп.панели ────────────────────────────── */
+#splitReload svg { transition: transform .2s; }
+#splitReload:hover svg { transform: rotate(-30deg); color: var(--c-accent); }
+#splitReload.spinning svg { animation: spin360 .6s cubic-bezier(.4,0,.2,1); }
+
+/* ── Пасхалка: радужный кувырок логотипа ──────────────────────── */
+@keyframes logoParty {
+  0%   { transform: rotate(0)      scale(1);   filter: hue-rotate(0deg); }
+  25%  { transform: rotate(180deg) scale(1.3); filter: hue-rotate(90deg); }
+  50%  { transform: rotate(360deg) scale(1.1); filter: hue-rotate(180deg); }
+  75%  { transform: rotate(540deg) scale(1.3); filter: hue-rotate(270deg); }
+  100% { transform: rotate(720deg) scale(1);   filter: hue-rotate(360deg); }
+}
+.logo-party { animation: logoParty 1.1s cubic-bezier(.4,0,.2,1); }
+
+#eggToast {
+  position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%) translateY(20px);
+  background: var(--c-text); color: #fff; padding: 9px 18px; border-radius: 999px;
+  font-size: 13px; font-weight: 500; box-shadow: var(--sh-lg); z-index: 99999;
+  opacity: 0; pointer-events: none; transition: opacity .3s, transform .3s;
+}
+#eggToast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.egg-confetti {
+  position: fixed; top: -20px; font-size: 18px; z-index: 99998; pointer-events: none;
+  animation: eggFall linear forwards;
+}
+@keyframes eggFall {
+  to { transform: translateY(105vh) rotate(540deg); opacity: 0; }
+}

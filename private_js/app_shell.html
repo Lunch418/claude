@@ -1,0 +1,569 @@
+<header>
+  <div class="logo" id="logoWrap" style="position:relative">
+    <div class="logo-mark" id="logoMark">
+      <svg id="logoIconRemote" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <ellipse cx="12" cy="5" rx="9" ry="3"/>
+        <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+        <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
+      </svg>
+      <svg id="logoIconLocal" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="display:none">
+        <rect x="2" y="3" width="20" height="14" rx="2"/>
+        <path d="M8 21h8M12 17v4"/>
+      </svg>
+    </div>
+    <span class="logo-name" id="logoName">СЭД <span id="logoDbLabel">/ doc</span></span>
+    <div id="dbSwitchDropdown" style="
+      display:none; position:absolute; top:calc(100% + 8px); left:0; z-index:500;
+      background:var(--c-surface); border:1px solid var(--c-border);
+      border-radius:var(--r); box-shadow:var(--sh-lg); min-width:170px; overflow:hidden;
+    ">
+      <div style="padding:6px 10px 4px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--c-text-3)">База данных</div>
+      <button class="db-switch-item active" id="dbItemRemote" onclick="switchDb('remote')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
+        <span>doc <span style="color:var(--c-text-3);font-size:11px">— SED</span></span>
+      </button>
+      <button class="db-switch-item" id="dbItemLocal" onclick="switchDb('local')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <span>sed_log <span style="color:var(--c-text-3);font-size:11px">— LOCAL</span></span>
+      </button>
+      <button class="db-switch-item" id="dbItemChed" onclick="switchDb('ched')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
+        <span>CHED <span style="color:var(--c-text-3);font-size:11px">— CHED</span></span>
+      </button>
+      <button class="db-switch-item" id="dbItemChed2" onclick="switchDb('ched2')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
+        <span>CHED2 <span style="color:var(--c-text-3);font-size:11px">— ESPH</span></span>
+      </button>
+      <button class="db-switch-item" id="dbItemKsp" onclick="switchDb('ksp')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
+        <span>КСП <span style="color:var(--c-text-3);font-size:11px">— KSP</span></span>
+      </button>
+    </div>
+  </div>
+  <select id="chedSchemaSelect" onchange="onChedSchemaChange(this.value)" title="Схема CHED"
+    style="display:none;margin-left:6px;font-size:11.5px;padding:3px 9px;border:1px solid var(--c-border);
+           border-radius:var(--r);background:var(--c-surface-2);color:var(--c-text-2);max-width:180px;cursor:pointer">
+  </select>
+  <span class="h-badge" id="tblCountBadge" style="cursor:pointer" title="Перейти к списку таблиц">загрузка...</span>
+  <span class="h-badge" id="fkBadge"
+    style="visibility:hidden;opacity:0;background:var(--c-green-bg);color:var(--c-green);border-color:var(--c-green-border);cursor:pointer"
+    title="Показать все FK-связи"></span>
+  <button class="h-badge" id="btnHistory"
+    style="cursor:pointer;background:var(--c-surface-2);border:1px solid var(--c-border);
+           display:flex;align-items:center;gap:5px;font-size:11.5px;padding:3px 10px;
+           border-radius:var(--r);color:var(--c-text-2)"
+    title="История запросов">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
+    История
+  </button>
+  <div class="h-gap"></div>
+  <div class="user-badge-wrap" id="userBadge">
+    <div class="user-badge-name">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>
+      <span id="userBadgeName">—</span>
+    </div>
+    <button class="user-badge-logout" id="btnLogout" title="Выйти из системы">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- ── LAYOUT ─────────────────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- ── SIDEBAR ─────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-tabs">
+      <div class="sidebar-tab active" id="tab-tables">Таблицы</div>
+      <div class="sidebar-tab" id="tab-templates">Шаблоны</div>
+      <div class="sidebar-tab" id="tab-saved">Запросы</div>
+    </div>
+
+    <!-- Таблицы -->
+    <div class="sidebar-panel active" id="panel-tables">
+      <div class="sidebar-search">
+        <div class="sb-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="text" id="tableSearch" placeholder="Поиск таблицы...">
+        </div>
+      </div>
+      <div class="section-lbl" id="tblCount">таблицы</div>
+      <div class="table-list" id="tableList">
+        <div class="placeholder" style="height:160px">
+          <div class="loading-spinner"></div>
+          <div style="font-size:12px;margin-top:6px;color:var(--c-text-3)">Загрузка из БД...</div>
+        </div>
+      </div>
+      <div id="localSqlOpenWrap" style="display:none;padding:8px 12px 4px">
+        <button id="localSqlOpenBtn" class="btn btn-outline" onclick="openLocalSqlModal()"
+          style="width:100%;font-size:12px;justify-content:center;gap:6px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+          </svg>
+          SQL запрос
+        </button>
+      </div>
+    </div>
+
+    <!-- Шаблоны -->
+    <div class="sidebar-panel" id="panel-templates">
+      <div class="sidebar-search">
+        <div class="sb-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="text" id="tmplSearch" placeholder="Поиск шаблона...">
+        </div>
+      </div>
+      <div class="section-lbl" id="tmplCount">шаблоны</div>
+      <div class="tmpl-list" id="templateList"></div>
+    </div>
+
+    <!-- Сохранённые запросы -->
+    <div class="sidebar-panel" id="panel-saved">
+      <div class="sidebar-search">
+        <div class="sb-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="text" id="savedSearch" placeholder="Поиск запроса...">
+        </div>
+      </div>
+      <div class="section-lbl" id="savedCount">запросы</div>
+      <div class="tmpl-list" id="savedList"></div>
+    </div>
+
+  </aside>
+
+  <!-- ── MAIN ───────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <button class="btn btn-ghost" id="btnBack"
+          style="display:none;padding:0 10px;gap:4px;font-size:12.5px" title="Назад">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Назад
+        </button>
+        <span class="toolbar-title" id="currentTable">— выберите таблицу</span>
+
+        <!-- Фильтры для режима таблиц -->
+        <div class="toolbar-filters" id="toolbarFilters">
+          <div class="sep-v"></div>
+          <div class="filter-group">
+            <span class="filter-label">ID</span>
+            <input type="number" id="filterId" placeholder="любой" style="width:78px">
+          </div>
+          <div class="filter-group" id="dateFilterGroup">
+            <span class="filter-label">Дата</span>
+            <input type="date" id="filterDateFrom">
+            <span class="filter-label" style="color:var(--c-text-3)">—</span>
+            <input type="date" id="filterDateTo">
+            <span class="date-hint" id="dateHint" title="Колонка даты не найдена в таблице">нет даты</span>
+          </div>
+        </div>
+
+        <!-- Лимит (всегда виден) -->
+        <div class="filter-group" id="limitControl">
+          <span class="filter-label">Строк</span>
+          <select id="limitSelect">
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="500">500</option>
+            <option value="1000">1 000</option>
+            <option value="5000">5 000</option>
+            <option value="10000">10 000</option>
+            <option value="999999">Все</option>
+          </select>
+        </div>
+        <div class="sep-v"></div>
+        <button class="btn btn-primary" id="btnLoad">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Загрузить
+        </button>
+        <button class="btn btn-outline" id="btnCancelQuery" 
+  style="display:none;color:var(--c-red);border-color:var(--c-red-border)" 
+  onclick="cancelQuery()">
+  Отмена
+</button>
+        <button class="btn btn-ghost" id="btnReset" title="Сбросить фильтры">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+          </svg>
+          Сброс
+        </button>
+        <button class="btn btn-ghost" id="btnClearCache" title="Обновить данные из БД — сбрасывает кэш">
+          <svg id="refreshIcon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="transition:transform .5s">
+            <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+          </svg>
+          Обновить
+        </button>
+      </div>
+      <div class="toolbar-right">
+        <div class="sep-v"></div>
+        <!-- Видимость колонок -->
+        <div id="columnsDropdownWrap" style="position:relative">
+          <button class="btn btn-ghost" id="btnColumns" title="Показать / скрыть колонки">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M9 3v18M15 3v18"/>
+            </svg>
+            Колонки
+          </button>
+          <div id="columnsDropdown"></div>
+        </div>
+        <div class="sep-v"></div>
+        <button class="btn btn-success" id="btnCsv">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          CSV
+        </button>
+        <button class="btn btn-outline" id="btnExcel">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Excel
+        </button>
+      </div>
+    </div>
+
+    <!-- Панель параметров шаблона -->
+    <div class="param-panel" id="paramPanel" style="display:none">
+      <div class="param-header">
+        <div class="param-header-left">
+          <div class="param-pip"></div>
+          <span class="param-panel-title">Параметры&thinsp;·</span>
+          <span class="param-template-name" id="paramTemplateName"></span>
+        </div>
+        <div class="param-actions">
+          <button class="btn btn-primary" id="btnRunTemplate">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Выполнить
+          </button>
+          <button class="btn btn-ghost" id="btnResetParams" title="Сбросить параметры">↺</button>
+          <button class="btn btn-ghost" id="btnCloseParams" title="Закрыть">✕</button>
+        </div>
+      </div>
+      <div class="param-fields" id="paramFields"></div>
+      <div class="param-errors" id="paramErrors" style="display:none"></div>
+    </div>
+
+    <!-- SQL-редактор -->
+    <div class="sql-bar" id="sqlBar">
+      <div class="sql-wrap">
+        <div class="sql-label">
+          <div class="sql-pip"></div>
+          SQL-запрос
+          <button class="sql-toggle-btn" id="sqlToggleBtn" title="Свернуть / развернуть">▲</button>
+        </div>
+        <div id="sqlEditorWrap" style="background:#fafbfe;border:1px solid var(--c-border);border-radius:var(--r);box-shadow:inset 0 1px 2px rgba(0,0,0,.03);">
+          <div id="sqlHighlight" aria-hidden="true"></div>
+          <textarea id="sqlEditor" placeholder="SELECT * FROM document LIMIT 100  — или напишите свой запрос..."></textarea>
+        </div>
+      </div>
+      <div class="sql-actions" id="sqlBarActions">
+        <button class="btn btn-primary" id="btnRunSql">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Выполнить
+        </button>
+        <button class="btn btn-outline" id="btnClearSql">Очистить</button>
+        <button class="btn btn-ghost" id="btnSaveQuery" title="Сохранить запрос" onclick="openSaveQueryModal()" style="color:var(--c-text-2)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+          </svg>
+          Сохранить
+        </button>
+        <button class="btn btn-ghost" id="btnRestoreSql" title="Восстановить последний SQL" style="display:none;color:var(--c-accent)">
+          ↩ Восстановить SQL
+        </button>
+      </div>
+    </div>
+
+    <!-- Область данных -->
+    <div class="table-area" id="tableArea" style="position:relative">
+      <div class="placeholder" style="height:100%">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--c-border)">
+          <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M3 15h18M9 3v18"/>
+        </svg>
+        <div style="color:var(--c-text-2);font-weight:500;font-size:13.5px">Выберите таблицу или шаблон</div>
+        <div style="font-size:12px;color:var(--c-text-3)">Таблицы — прямой просмотр &nbsp;·&nbsp; Шаблоны — готовые запросы с параметрами</div>
+      </div>
+    </div>
+
+    <!-- Пагинация -->
+    <div class="pagination" id="paginationBar" style="display:none">
+      <button class="page-btn" id="btnPrevPage" title="Предыдущая страница">‹</button>
+      <div id="pageButtons" style="display:flex;gap:4px"></div>
+      <button class="page-btn" id="btnNextPage" title="Следующая страница">›</button>
+      <span class="page-info" id="pageInfo"></span>
+    </div>
+
+    <!-- Статусбар -->
+    <div class="statusbar">
+      <span id="statusTag" class="tag" style="display:none"></span>
+      <span id="statusText" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        Готово · выберите таблицу слева
+      </span>
+      <span style="flex:1"></span>
+      <div class="statusbar-search" id="statusbarSearch" style="display:none">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input type="text" id="filterText" placeholder="Поиск по строкам...">
+      </div>
+      <span id="rowCount" style="font-family:var(--font-mono);font-size:11.5px;white-space:nowrap"></span>
+      <span id="queryTime" style="font-family:var(--font-mono);font-size:11.5px;color:var(--c-text-3);white-space:nowrap;margin-left:4px"></span>
+    </div>
+  </main>
+</div>
+
+<!-- ── EXPORT MODAL ───────────────────────────────────────────── -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <h3>Экспорт данных</h3>
+
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+
+      <!-- Вариант 1: загруженные строки -->
+      <label id="exportOptCurrentLabel" style="
+        display:flex;align-items:flex-start;gap:10px;
+        padding:10px 12px;border-radius:8px;cursor:pointer;
+        border:2px solid var(--c-border);transition:border-color .15s;
+      ">
+        <input type="radio" name="exportScope" value="current" id="exportOptCurrent"
+          style="margin-top:2px;accent-color:var(--c-accent);flex-shrink:0">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:var(--c-text)">
+            Загруженные строки
+          </div>
+          <div id="exportCurrentDesc" style="font-size:12px;color:var(--c-text-3);margin-top:2px"></div>
+        </div>
+      </label>
+
+      <!-- Вариант 2: все из БД -->
+      <label id="exportOptAllLabel" style="
+        display:flex;align-items:flex-start;gap:10px;
+        padding:10px 12px;border-radius:8px;cursor:pointer;
+        border:2px solid var(--c-border);transition:border-color .15s;
+      ">
+        <input type="radio" name="exportScope" value="all" id="exportOptAll"
+          style="margin-top:2px;accent-color:var(--c-accent);flex-shrink:0">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:var(--c-text)">
+            Все данные из БД
+          </div>
+          <div style="font-size:12px;color:var(--c-text-3);margin-top:2px">
+            Новый запрос без лимита — может занять время
+          </div>
+        </div>
+      </label>
+
+    </div>
+
+    <div id="exportAllProgress" style="display:none;font-size:12.5px;color:var(--c-text-3);margin-bottom:10px"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btnExportCancel" onclick="closeModal()" style="color:var(--c-text-3)">Отмена</button>
+      <button class="btn btn-success" id="exportConfirmBtn">⬇ Скачать</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TABLES MODAL ────────────────────────────────────────────── -->
+<div class="modal-overlay" id="tablesModal">
+  <div class="modal" style="width:720px;max-width:94vw">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">
+      <div>
+        <h3 style="margin:0">Все таблицы</h3>
+        <p style="margin:5px 0 0;font-size:12.5px">Найдено: <strong id="tblModalCount">0</strong></p>
+      </div>
+      <button class="btn btn-ghost" id="btnCloseTblModal" title="Закрыть">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+      <input id="tblModalSearch" type="text" placeholder="Поиск по имени или описанию..."
+        style="flex:1">
+      <select id="tblModalSort" style="width:160px">
+        <option value="name_asc">По имени A→Z</option>
+        <option value="name_desc">По имени Z→A</option>
+      </select>
+    </div>
+    <div style="max-height:55vh;overflow:auto;border:1px solid var(--c-border);border-radius:var(--r)">
+      <table class="data-table" style="min-width:100%;width:100%">
+        <thead><tr>
+          <th style="cursor:pointer" data-sort="name">Имя таблицы ↕</th>
+          <th style="cursor:pointer" data-sort="label">Описание ↕</th>
+        </tr></thead>
+        <tbody id="tblModalTbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="btnCloseTblModal2">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── EDIT SAVED QUERY MODAL ─────────────────────────────────── -->
+<div class="modal-overlay" id="editSavedModal">
+  <div class="modal" style="width:560px">
+    <h3>Редактировать запрос</h3>
+    <input type="hidden" id="editSavedId">
+    <div style="margin-bottom:8px">
+      <label style="font-size:12px;color:var(--c-text-2);display:block;margin-bottom:4px">Название</label>
+      <input type="text" id="editSavedName" style="width:100%" maxlength="120">
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--c-text-2);display:block;margin-bottom:4px">SQL-запрос</label>
+      <textarea id="editSavedSql" style="
+        width:100%;height:180px;resize:vertical;
+        font-family:var(--font-mono);font-size:12px;
+        background:var(--c-surface-2);border:1px solid var(--c-border);
+        border-radius:var(--r);padding:8px 10px;color:var(--c-text);
+        outline:none;line-height:1.6;
+      "></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeEditSavedModal()" style="color:var(--c-text-3)">Отмена</button>
+      <button class="btn btn-primary" onclick="confirmEditSaved()">Сохранить изменения</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── SAVE QUERY MODAL ───────────────────────────────────────── -->
+<div class="modal-overlay" id="saveQueryModal">
+  <div class="modal" style="width:460px">
+    <h3>Сохранить запрос</h3>
+    <p style="font-size:12.5px;color:var(--c-text-3);margin:0 0 12px">Введите название</p>
+    <input type="text" id="saveQueryName" placeholder="Например: Последние документы..."
+      style="width:100%;margin-bottom:8px" maxlength="120">
+    <div id="saveQueryPreview" style="
+      font-family:var(--font-mono);font-size:11px;
+      background:var(--c-surface-2);border:1px solid var(--c-border);
+      border-radius:var(--r-sm);padding:7px 10px;color:var(--c-text-3);
+      max-height:80px;overflow:hidden;text-overflow:ellipsis;
+      white-space:pre;margin-bottom:12px;
+    "></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeSaveQueryModal()" style="color:var(--c-text-3)">Отмена</button>
+      <button class="btn btn-primary" id="btnConfirmSave" onclick="confirmSaveQuery()">
+        Сохранить
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── FK MODAL ───────────────────────────────────────────────── -->
+<div class="modal-overlay" id="fkModal">
+  <div class="modal" style="width:760px;max-width:94vw">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">
+      <div>
+        <h3 style="margin:0">Связи (FOREIGN KEY)</h3>
+        <p style="margin:5px 0 0;font-size:12.5px">Найдено: <strong id="fkCountBadge">0</strong></p>
+      </div>
+      <button class="btn btn-ghost" id="btnCloseFk" title="Закрыть">✕</button>
+    </div>
+    <input id="fkSearch" type="text" placeholder="Поиск: from_table / from_col / to_table / to_col"
+      style="width:100%;margin-bottom:10px">
+    <div style="max-height:55vh;overflow:auto;border:1px solid var(--c-border);border-radius:var(--r)">
+      <table class="data-table" style="min-width:100%;width:100%">
+        <thead><tr><th>from_table</th><th>from_col</th><th>to_table</th><th>to_col</th></tr></thead>
+        <tbody id="fkTbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="btnCloseFk2">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── HISTORY MODAL ─────────────────────────────────────────── -->
+<div class="modal-overlay" id="historyModal">
+  <div class="modal" style="width:740px;max-width:95vw;max-height:88vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-shrink:0">
+      <div>
+        <h3 style="margin:0">История запросов</h3>
+        <p style="margin:4px 0 0;font-size:12px;color:var(--c-text-3)">Записей: <strong id="historyCount">0</strong></p>
+      </div>
+      <button class="btn btn-ghost" id="btnCloseHistory" title="Закрыть">✕</button>
+    </div>
+    <div id="historyList" style="overflow-y:auto;flex:1;border:1px solid var(--c-border);border-radius:var(--r);padding:6px"></div>
+    <div class="modal-actions" style="flex-shrink:0">
+      <button class="btn btn-outline" id="btnClearHistory" style="color:var(--c-red);border-color:var(--c-red-border)">
+        Очистить
+      </button>
+      <button class="btn btn-outline" id="btnCloseHistory2">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="localSqlModal">
+  <div class="modal" style="width:780px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div>
+        <h3 style="margin:0;font-size:15px">SQL — локальная БД <span style="color:var(--c-text-3);font-weight:400;font-size:13px">sed_log</span></h3>
+        <p style="margin:3px 0 0;font-size:11.5px;color:var(--c-text-3)">Только SELECT. Таблицы: sed_query_log, sed_user_prefs</p>
+      </div>
+      <button class="btn btn-ghost" onclick="closeLocalSqlModal()">✕</button>
+    </div>
+    <div style="flex-shrink:0">
+      <textarea id="localSqlEditor" rows="5" style="
+        width:100%;font-family:var(--font-mono);font-size:12.5px;line-height:1.6;
+        padding:9px 12px;border:1px solid var(--c-border);border-radius:var(--r);
+        background:#fafbfe;color:#1e3a8a;resize:vertical;outline:none;
+        transition:border-color .15s,box-shadow .15s;
+      " placeholder="SELECT * FROM sed_query_log ORDER BY ts DESC LIMIT 100">SELECT * FROM sed_query_log ORDER BY ts DESC LIMIT 100</textarea>
+    </div>
+    <div style="display:flex;gap:8px;flex-shrink:0;align-items:center">
+      <button class="btn btn-primary" id="btnRunLocalSql" onclick="runLocalSql()">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Выполнить
+      </button>
+      <span id="localSqlStatus" style="font-size:12px;color:var(--c-text-3)"></span>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeLocalSqlModal()">Закрыть</button>
+    </div>
+    <div id="localSqlResult" style="
+      flex:1;overflow:auto;border:1px solid var(--c-border);border-radius:var(--r);
+      min-height:200px;font-size:12px;
+    ">
+      <div class="placeholder" style="height:140px;font-size:12px;color:var(--c-text-3)">Выполните запрос</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── GLOBAL QUERY BAR ──────────────────────────────────────────── -->
+<div id="globalQueryBar" style="display:none">
+  <div id="gqbProgress"></div>
+  <div id="gqbInner">
+    <div id="gqbLeft">
+      <span id="gqbSpinner" class="gqb-spinner"></span>
+      <div id="gqbInfo">
+        <span id="gqbTimer">00:00</span>
+        <span id="gqbSql" class="gqb-sql"></span>
+      </div>
+    </div>
+    <button id="gqbCancel" onclick="cancelQuery()">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+      Остановить
+    </button>
+  </div>
+</div>

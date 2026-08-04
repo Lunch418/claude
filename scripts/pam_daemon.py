@@ -1,0 +1,742 @@
+#!/usr/bin/env python3
+"""
+pam_daemon.py — Персистентный SSH-демон для СЭД.
+
+Команды:
+  python3 pam_daemon.py --start      # запуск в фоне
+  python3 pam_daemon.py --stop       # остановка
+  python3 pam_daemon.py --restart    # перезапуск
+  python3 pam_daemon.py --status     # состояние + ping
+  python3 pam_daemon.py --logs       # последние строки лога
+  python3 pam_daemon.py --foreground # запуск на переднем плане (для отладки)
+"""
+
+import os, sys, json, time, socket, threading, signal, hashlib, re, base64, secrets, logging
+from pathlib import Path
+
+
+def _load_env():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    for candidate in [
+        os.path.join(script_dir, '.env'),
+        os.path.join(script_dir, '..', '.env'),
+        os.path.join(script_dir, '..', '..', '.env'),
+    ]:
+        path = os.path.normpath(candidate)
+        if os.path.exists(path):
+            with open(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#') or '=' not in line:
+                        continue
+                    k, v = line.split('=', 1)
+                    k, v = k.strip(), v.strip()
+                    if k and k not in os.environ:
+                        os.environ[k] = v
+            return path
+    return None
+
+_env_file = _load_env()
+
+SOCK_PATH  = '/tmp/sed_query.sock'
+PID_FILE   = '/tmp/sed_daemon.pid'
+LOG_FILE   = '/tmp/sed_daemon.log'
+CACHE_DIR  = '/tmp/sed_cache'
+
+CACHE_TTL        = 20    # секунд — живые данные (было 60)
+CACHE_TTL_LONG   = 3600  # секунд — для справочников (1 час)
+KEEPALIVE_SEC    = 45
+QUERY_TIMEOUT    = 1800
+MAX_RECONNECTS   = 5
+
+PAM_HOST    = os.environ.get('PAM_HOST',        '')
+PAM_PORT    = os.environ.get('PAM_PORT',        '22')
+PAM_USER    = os.environ.get('PAM_USER',        '')
+PAM_PASS    = os.environ.get('PAM_PASSWORD',    '')
+TARGET_HOST = os.environ.get('TARGET_HOST',     '')
+TARGET_USER = os.environ.get('TARGET_USER',     '')
+TARGET_PASS = os.environ.get('TARGET_PASSWORD', '')
+DB_HOST     = os.environ.get('DB_HOST',         '')
+DB_PORT     = os.environ.get('DB_PORT',         '5432')
+DB_NAME     = os.environ.get('DB_NAME',         '')
+DB_USER     = os.environ.get('DB_USER',         '')
+DB_PASS     = os.environ.get('SED_DB_PASS',     '')
+
+# ── Профиль CHED: тот же хост PAM, но свой вход в портал,
+#    своя ВМ и свои креды БД. Совпадает только PAM_HOST/PAM_PORT.
+CHED_PAM_USER    = os.environ.get('CHED_PAM_USER',        '')
+CHED_PAM_PASS    = os.environ.get('CHED_PAM_PASSWORD',    '')
+CHED_TARGET_HOST = os.environ.get('CHED_TARGET_HOST',     '')
+CHED_TARGET_USER = os.environ.get('CHED_TARGET_USER',     '')
+CHED_TARGET_PASS = os.environ.get('CHED_TARGET_PASSWORD', '')
+CHED_DB_HOST = os.environ.get('CHED_DB_HOST', '')
+CHED_DB_PORT = os.environ.get('CHED_DB_PORT', '5432')
+CHED_DB_NAME = os.environ.get('CHED_DB_NAME', '')
+CHED_DB_USER = os.environ.get('CHED_DB_USER', '')
+CHED_DB_PASS = os.environ.get('CHED_DB_PASS', '')
+
+# ── Профиль CHED2: та же ВМ/вход/DB-юзер, что у CHED, но другая
+#    база (свой host и name). PAM-сессия CHED переиспользуется.
+CHED2_DB_HOST = os.environ.get('CHED2_DB_HOST', '')
+CHED2_DB_PORT = os.environ.get('CHED2_DB_PORT', CHED_DB_PORT)
+CHED2_DB_NAME = os.environ.get('CHED2_DB_NAME', '')
+
+# ── Профиль KSP: тот же PAM-хост/порт, но свой вход в портал,
+#    своя ВМ и свои креды БД. Полностью независимая сессия (как CHED,
+#    но отдельная — CHED-сессию не переиспользует).
+KSP_PAM_USER    = os.environ.get('KSP_PAM_USER',        '')
+KSP_PAM_PASS    = os.environ.get('KSP_PAM_PASSWORD',    '')
+KSP_TARGET_HOST = os.environ.get('KSP_TARGET_HOST',     '')
+KSP_TARGET_USER = os.environ.get('KSP_TARGET_USER',     '')
+KSP_TARGET_PASS = os.environ.get('KSP_TARGET_PASSWORD', '')
+KSP_DB_HOST = os.environ.get('KSP_DB_HOST', '')
+KSP_DB_PORT = os.environ.get('KSP_DB_PORT', '5432')
+KSP_DB_NAME = os.environ.get('KSP_DB_NAME', '')
+KSP_DB_USER = os.environ.get('KSP_DB_USER', '')
+KSP_DB_PASS = os.environ.get('KSP_DB_PASS', '')
+
+# Имя схемы: только латиница/цифры/подчёркивание (для search_path)
+_SCHEMA_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+
+_DANGEROUS = re.compile(
+    r'\b(insert|update|delete|drop|alter|create|truncate|copy|'
+    r'grant|revoke|call|do|execute|vacuum|analyze|'
+    r'pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|'
+    r'lo_import|lo_export|dblink|pg_terminate_backend|pg_sleep)\b', re.I
+)
+
+def validate_readonly(sql: str) -> None:
+    q = re.sub(r'/\*.*?\*/', ' ', sql, flags=re.S)
+    q = re.sub(r'--[^\n]*', ' ', q).strip()
+    if ';' in q:
+        raise ValueError("Only single statement (no ';').")
+    if not re.match(r'^(with\b[\s\S]+?\bselect\b|select\b)', q, flags=re.I):
+        raise ValueError('Only SELECT allowed.')
+    if _DANGEROUS.search(q):
+        raise ValueError('Forbidden keyword detected.')
+
+
+
+_REMOTE_SCRIPT_B64 = "CmltcG9ydCBqc29uLCBzeXMsIG9zLCBpbywgY3N2LCBwc3ljb3BnMgoKZGVmIF9kZWR1cF9jb2xzKGRlc2NyaXB0aW9uKToKICAgIHNlZW4gPSB7fQogICAgY29scyA9IFtdCiAgICBmb3IgZCBpbiBkZXNjcmlwdGlvbjoKICAgICAgICBuYW1lID0gZFswXQogICAgICAgIGlmIG5hbWUgaW4gc2VlbjoKICAgICAgICAgICAgc2VlbltuYW1lXSArPSAxCiAgICAgICAgICAgIGNvbHMuYXBwZW5kKGYie25hbWV9X3tzZWVuW25hbWVdfSIpCiAgICAgICAgZWxzZToKICAgICAgICAgICAgc2VlbltuYW1lXSA9IDEKICAgICAgICAgICAgY29scy5hcHBlbmQobmFtZSkKICAgIHJldHVybiBjb2xzCgpkZWYgX3Jvd3NfYXNfZGljdHMoY3Vyc29yLCBjb2xzKToKICAgIHJldHVybiBbZGljdCh6aXAoY29scywgcm93KSkgZm9yIHJvdyBpbiBjdXJzb3IuZmV0Y2hhbGwoKV0KCnRyeToKICAgIGltcG9ydCBwc3ljb3BnMiwgcHN5Y29wZzIuZXh0cmFzCiAgICBzcWwgICAgPSBvcy5lbnZpcm9uWydfU0VEX1NRTCddCiAgICBtb2RlICAgPSBvcy5lbnZpcm9uLmdldCgnX1NFRF9NT0RFJywgJ3ByZXZpZXcnKQogICAgY24gPSBwc3ljb3BnMi5jb25uZWN0KAogICAgICAgIGhvc3Q9b3MuZW52aXJvblsnX1NFRF9EQkhPU1QnXSwKICAgICAgICBwb3J0PW9zLmVudmlyb25bJ19TRURfREJQT1JUJ10sCiAgICAgICAgZGJuYW1lPW9zLmVudmlyb25bJ19TRURfREJOQU1FJ10sCiAgICAgICAgdXNlcj1vcy5lbnZpcm9uWydfU0VEX0RCVVNFUiddLAogICAgICAgIHBhc3N3b3JkPW9zLmVudmlyb25bJ19TRURfREJQQVNTJ10sCiAgICAgICAgY29ubmVjdF90aW1lb3V0PTEwLAogICAgICAgIG9wdGlvbnM9Jy1jIHN0YXRlbWVudF90aW1lb3V0PTU5MDAwMCcsCiAgICApCiAgICBjbi5hdXRvY29tbWl0ID0gVHJ1ZQogICAgY3UgPSBjbi5jdXJzb3IoKQogICAgIyBTYXZlIHBnX2JhY2tlbmRfcGlkIGZvciBwZ19jYW5jZWxfYmFja2VuZCBzdXBwb3J0CiAgICBjdS5leGVjdXRlKCJTRUxFQ1QgcGdfYmFja2VuZF9waWQoKSIpCiAgICBfcGdfcGlkID0gY3UuZmV0Y2hvbmUoKVswXQogICAgX3Jlc3VsdF9maWxlID0gb3MuZW52aXJvbi5nZXQoJ19TRURfUkVTVUxUX0ZJTEUnLCAnJykKICAgIGlmIF9yZXN1bHRfZmlsZToKICAgICAgICBfcGdwaWRfZmlsZSA9IF9yZXN1bHRfZmlsZS5yZXBsYWNlKCcucmVzdWx0JywgJy5wZ3BpZCcpCiAgICAgICAgdHJ5OgogICAgICAgICAgICB3aXRoIG9wZW4oX3BncGlkX2ZpbGUsICd3JykgYXMgX2Y6CiAgICAgICAgICAgICAgICBfZi53cml0ZShzdHIoX3BnX3BpZCkpCiAgICAgICAgZXhjZXB0IEV4Y2VwdGlvbjoKICAgICAgICAgICAgcGFzcwogICAgY3UuZXhlY3V0ZSgiU0VUIG1heF9wYXJhbGxlbF93b3JrZXJzX3Blcl9nYXRoZXIgPSAwIikKICAgIGlmIG1vZGUgPT0gJ2V4cG9ydCc6CiAgICAgICAgY3UyID0gY24uY3Vyc29yKCdleHBvcnRfY3Vyc29yJykKICAgICAgICBjdTIuaXRlcnNpemUgPSAxMDAwCiAgICAgICAgY3UyLmV4ZWN1dGUoc3FsKQogICAgICAgIGNvbHMgPSBfZGVkdXBfY29scyhjdTIuZGVzY3JpcHRpb24pCiAgICAgICAgYnVmID0gaW8uU3RyaW5nSU8oKQogICAgICAgIHdyaXRlciA9IGNzdi53cml0ZXIoYnVmLCBkZWxpbWl0ZXI9JzsnLCBxdW90aW5nPWNzdi5RVU9URV9NSU5JTUFMKQogICAgICAgIHdyaXRlci53cml0ZXJvdyhjb2xzKQogICAgICAgIHJvd3Nfd3JpdHRlbiA9IDAKICAgICAgICBmb3Igcm93IGluIGN1MjoKICAgICAgICAgICAgd3JpdGVyLndyaXRlcm93KFtzdHIodikgaWYgdiBpcyBub3QgTm9uZSBlbHNlICcnIGZvciB2IGluIHJvd10pCiAgICAgICAgICAgIHJvd3Nfd3JpdHRlbiArPSAxCiAgICAgICAgY3UyLmNsb3NlKCkKICAgICAgICBjbi5jbG9zZSgpCiAgICAgICAgc3lzLnN0ZG91dC53cml0ZShqc29uLmR1bXBzKAogICAgICAgICAgICB7J29rJzogVHJ1ZSwgJ2Nzdic6IGJ1Zi5nZXR2YWx1ZSgpLCAnY291bnQnOiByb3dzX3dyaXR0ZW59LAogICAgICAgICAgICBkZWZhdWx0PXN0ciwKICAgICAgICApICsgJ1xuJykKICAgIGVsc2U6CiAgICAgICAgY3UuZXhlY3V0ZShzcWwpCiAgICAgICAgY29scyA9IF9kZWR1cF9jb2xzKGN1LmRlc2NyaXB0aW9uKQogICAgICAgIHJvd3MgPSBfcm93c19hc19kaWN0cyhjdSwgY29scykKICAgICAgICBjbi5jbG9zZSgpCiAgICAgICAgc3lzLnN0ZG91dC53cml0ZShqc29uLmR1bXBzKAogICAgICAgICAgICB7J29rJzogVHJ1ZSwgJ2NvbHVtbnMnOiBjb2xzLCAncm93cyc6IHJvd3MsICdjb3VudCc6IGxlbihyb3dzKX0sCiAgICAgICAgICAgIGRlZmF1bHQ9c3RyLAogICAgICAgICkgKyAnXG4nKQogICAgc3lzLnN0ZG91dC5mbHVzaCgpCmV4Y2VwdCBFeGNlcHRpb24gYXMgZToKICAgIHN5cy5zdGRvdXQud3JpdGUoanNvbi5kdW1wcyh7J29rJzogRmFsc2UsICdlcnJvcic6IHN0cihlKX0pICsgJ1xuJykKICAgIHN5cy5zdGRvdXQuZmx1c2goKQo="
+
+
+
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%H:%M:%S',
+)
+log = logging.getLogger('daemon')
+
+def _sq(s: str) -> str:
+    return "'" + s.replace("'", "'" + chr(92) + "'" + "'" + "'" + chr(92) + "'" + "'") + "'"
+
+
+def _b64env(val: str) -> str:
+    b64 = base64.b64encode(val.encode()).decode()
+    return '"$(printf ' + "'%s'" + ' ' + _sq(b64) + ' | base64 -d)"'
+
+
+_LONG_CACHE_RE = re.compile(
+    r'(db_version|user_group|medo_org|nomenclature|r_list\b|'
+    r'information_schema|pg_class|pg_namespace|pg_constraint|'
+    r'pg_attribute|c_org|usr\b|org_folder|user_post\b)', re.I
+)
+
+class Cache:
+    def __init__(self):
+        os.makedirs(CACHE_DIR, mode=0o700, exist_ok=True)
+        try: os.chmod(CACHE_DIR, 0o700)
+        except OSError: pass
+        self._lock = threading.Lock()
+
+    def clear_all(self) -> int:
+        """Удаляет все файлы кэша, возвращает количество."""
+        count = 0
+        with self._lock:
+            try:
+                for f in Path(CACHE_DIR).glob('*.json'):
+                    try:
+                        f.unlink()
+                        count += 1
+                    except OSError:
+                        pass
+            except Exception:
+                pass
+        return count
+
+    def _path(self, sql, mode, limit):
+        h = hashlib.sha256(f'{sql}|{mode}|{limit}'.encode()).hexdigest()
+        return os.path.join(CACHE_DIR, h + '.json')
+
+    def _ttl(self, sql):
+        return CACHE_TTL_LONG if _LONG_CACHE_RE.search(sql) else CACHE_TTL
+
+    def get(self, sql, mode, limit):
+        p = self._path(sql, mode, limit)
+        with self._lock:
+            try:
+                if time.time() - os.path.getmtime(p) > self._ttl(sql):
+                    os.unlink(p); return None
+                d = json.loads(Path(p).read_text('utf-8'))
+                d['_cached'] = True
+                return d
+            except Exception:
+                return None
+
+    def put(self, sql, mode, limit, data):
+        p = self._path(sql, mode, limit)
+        with self._lock:
+            try:
+                Path(p).write_text(json.dumps(data, default=str, ensure_ascii=False), 'utf-8')
+                try: os.chmod(p, 0o600)   # ПДн в кэше — только uid демона
+                except OSError: pass
+            except Exception:
+                pass
+
+    def clear(self):
+        with self._lock:
+            for f in Path(CACHE_DIR).glob('*.json'):
+                try: f.unlink()
+                except: pass
+
+class Session:
+    def __init__(self, pam_user, pam_pass, target_host, target_user, target_pass,
+                 db_host, db_port, db_name, db_user, db_pass):
+        try:
+            import pexpect as px
+            self.px = px
+        except ImportError:
+            raise RuntimeError('No pexpect: pip3 install pexpect')
+        self.pam_user     = pam_user
+        self.pam_pass     = pam_pass
+        self.target_host  = target_host
+        self.target_user  = target_user
+        self.target_pass  = target_pass
+        self.db_host      = db_host
+        self.db_port      = db_port
+        self.db_name      = db_name
+        self.db_user      = db_user
+        self.db_pass      = db_pass
+        self.child        = None
+        self.alive        = False
+        self._lock        = threading.Lock()
+        self._script_path = None
+
+    def connect(self):
+        px = self.px
+        log.info('Connecting to PAM %s:%s (.env: %s)', PAM_HOST, PAM_PORT, _env_file or 'not found')
+        cmd = (
+            f'ssh -tt -p {PAM_PORT} -F /dev/null'
+            f' -o StrictHostKeyChecking=no'
+            f' -o UserKnownHostsFile=/dev/null'
+            f' -o ServerAliveInterval=20'
+            f' -o ServerAliveCountMax=3'
+            f' -o ConnectTimeout=20'
+            f' -o KexAlgorithms=+diffie-hellman-group14-sha1'
+            f' -o HostKeyAlgorithms=+ssh-rsa'
+            f' -o PubkeyAcceptedAlgorithms=+ssh-rsa'
+            f' {self.pam_user}@{PAM_HOST}'
+        )
+        c = px.spawn(cmd, timeout=130, maxread=1048576, searchwindowsize=65536)
+        c.setwinsize(150, 65535)
+
+        def ex(pats, name, t=30):
+            i = c.expect(pats + [px.TIMEOUT, px.EOF], timeout=t)
+            if i >= len(pats):
+                ctx = (c.before or b'')[-300:]
+                raise RuntimeError(f'{name}: {"TIMEOUT" if i==len(pats) else "EOF"} | {ctx!r}')
+            return i
+
+        def s(d):
+            c.send((d.encode() if isinstance(d, str) else d) + b'\r')
+
+        ex([b'[Pp]assword:'],    'PAM password',    t=25); s(self.pam_pass)
+        ex([b'select one:'],     'PAM menu',         t=30); s(self.target_host)
+        ex([b'[Uu]sername'],     'Username',         t=40); s(self.target_user)
+        ex([b'[Pp]assword:'],    'Server password', t=25); s(self.target_pass)
+        ex([b'\\$ ', b'# '], 'Shell prompt',    t=70)
+
+        self.child = c
+
+        script_path = f'/tmp/.sed_{secrets.token_hex(8)}.py'
+        c.send(f"printf '%s' {_sq(_REMOTE_SCRIPT_B64)} | base64 -d > {script_path}\r".encode())
+        ex([b'\\$ ', b'# '], 'Script write', t=15)
+        self._script_path = script_path
+
+        self.alive = True
+        log.info('SSH connected, script: %s', script_path)
+
+    def run(self, sql, mode, limit, schema='', db_override=None):
+        if not self.alive:
+            raise RuntimeError('Session not active')
+        with self._lock:
+            if not self.alive:
+                raise RuntimeError('Session not active')
+            return self._exec(sql, mode, limit, schema, db_override)
+
+    def _exec(self, sql, mode, limit, schema='', db_override=None):
+        px, c = self.px, self.child
+        wrapped = f'SELECT * FROM ({sql}) __w__ LIMIT {limit}' if mode == 'preview' and limit > 0 else sql
+        # Для выбранной схемы выставляем search_path перед запросом
+        # (schema уже провалидирована регуляркой выше по стеку).
+        # Если схема не задана или сама равна public — не дублируем
+        # (иначе получалось 'SET search_path TO "public", public;').
+        if schema and schema.lower() != 'public':
+            wrapped = f'SET search_path TO "{schema}", "public"; ' + wrapped
+        # db_override позволяет на той же ВМ-сессии ходить в другую базу
+        # (профиль CHED2: те же креды/ВМ, другой host/name).
+        if db_override:
+            db_host, db_port, db_name, db_user, db_pass = db_override
+        else:
+            db_host, db_port, db_name = self.db_host, self.db_port, self.db_name
+            db_user, db_pass = self.db_user, self.db_pass
+
+        token   = secrets.token_hex(10)
+        d_start = f'SEDQBEGIN{token}'.encode()
+        d_end   = f'SEDQEND{token}'.encode()
+
+        run_cmd = (
+            f'_SED_SQL={_b64env(wrapped)} '
+            f'_SED_MODE={_sq(mode)} '
+            f'_SED_LIMIT={_sq(str(limit))} '
+            f'_SED_DBHOST={_sq(db_host)} '
+            f'_SED_DBPORT={_sq(db_port)} '
+            f'_SED_DBNAME={_sq(db_name)} '
+            f'_SED_DBUSER={_sq(db_user)} '
+            f'_SED_DBPASS={_b64env(db_pass)} '
+            f'python3 {self._script_path}'
+        )
+        inner     = f'echo {d_start.decode()} ; {run_cmd} ; echo {d_end.decode()}'
+        inner_b64 = base64.b64encode(inner.encode()).decode()
+        outer     = f'eval "$(printf \'%s\' {_sq(inner_b64)} | base64 -d)"'
+        c.send((outer + '\r').encode())
+
+        idx = c.expect([d_start, px.TIMEOUT, px.EOF], timeout=20)
+        if idx != 0:
+            self.alive = False
+            raise RuntimeError(f'Start marker: {"TIMEOUT" if idx==1 else "EOF"}')
+
+        idx = c.expect([d_end, px.TIMEOUT, px.EOF], timeout=QUERY_TIMEOUT)
+        if idx != 0:
+            self.alive = False
+            raise RuntimeError(f'Query {"TIMEOUT" if idx==1 else "EOF"}')
+
+        raw   = c.before
+        lines = [ln.strip() for ln in raw.replace(b'\r', b'\n').split(b'\n') if ln.strip()]
+        json_line = None
+        for ln in reversed(lines):
+            decoded = ln.decode(errors='replace')
+            if decoded.startswith('{'):
+                json_line = decoded
+                break
+
+        if not json_line:
+            self.alive = False
+            raise RuntimeError(f'JSON not found. Output: {raw[-300:]!r}')
+
+        return json.loads(json_line)
+
+    def ping(self):
+        with self._lock:
+            if not self.alive or not self.child:
+                return False
+            try:
+                self.child.send(b'\r')
+                self.child.expect([b'\\$ ', b'# ', self.px.TIMEOUT], timeout=5)
+                return True
+            except Exception:
+                self.alive = False
+                return False
+
+    def close(self):
+        self.alive = False
+        if self.child:
+            if self._script_path:
+                try: self.child.send(f'rm -f {self._script_path}\r'.encode())
+                except Exception: pass
+                self._script_path = None
+            try: self.child.send(b'exit\r'); self.child.close(force=True)
+            except: pass
+            self.child = None
+
+class Daemon:
+    def __init__(self):
+        self.sess  = Session(PAM_USER, PAM_PASS, TARGET_HOST, TARGET_USER, TARGET_PASS,
+                             DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS)
+        self.ched_sess   = None
+        self._ched_lock  = threading.Lock()
+        self.ksp_sess    = None
+        self._ksp_lock   = threading.Lock()
+        self.cache = Cache()
+        self._stop = threading.Event()
+        self._inflight      = {}
+        self._inflight_lock = threading.Lock()
+
+    def _connect(self):
+        for n in range(1, MAX_RECONNECTS + 1):
+            try:
+                self.sess.close()
+                self.sess.connect()
+                return
+            except Exception as e:
+                log.error('Попытка %d/%d: %s', n, MAX_RECONNECTS, e)
+                if n < MAX_RECONNECTS:
+                    time.sleep(5 * n)
+        raise RuntimeError('Не удалось подключиться')
+
+    def _get_session(self, profile):
+        """Возвращает живую сессию для профиля.
+        CHED и CHED2 живут на одной ВМ → общая CHED-сессия.
+        KSP — своя независимая сессия."""
+        if profile == 'ksp':
+            with self._ksp_lock:
+                if not KSP_TARGET_HOST:
+                    raise RuntimeError('KSP не настроен: нет KSP_TARGET_HOST в .env')
+                if self.ksp_sess is None:
+                    self.ksp_sess = Session(
+                        KSP_PAM_USER, KSP_PAM_PASS,
+                        KSP_TARGET_HOST, KSP_TARGET_USER, KSP_TARGET_PASS,
+                        KSP_DB_HOST, KSP_DB_PORT, KSP_DB_NAME, KSP_DB_USER, KSP_DB_PASS)
+                if not self.ksp_sess.alive:
+                    last = None
+                    for n in range(1, MAX_RECONNECTS + 1):
+                        try:
+                            self.ksp_sess.close()
+                            self.ksp_sess.connect()
+                            break
+                        except Exception as e:
+                            last = e
+                            log.error('KSP-подключение %d/%d: %s', n, MAX_RECONNECTS, e)
+                            if n < MAX_RECONNECTS:
+                                time.sleep(5 * n)
+                    if not self.ksp_sess.alive:
+                        raise RuntimeError(f'KSP: не удалось подключиться: {last}')
+                return self.ksp_sess
+        if profile not in ('ched', 'ched2'):
+            return self.sess
+        with self._ched_lock:
+            if not CHED_TARGET_HOST:
+                raise RuntimeError('CHED не настроен: нет CHED_TARGET_HOST в .env')
+            if self.ched_sess is None:
+                self.ched_sess = Session(
+                    CHED_PAM_USER, CHED_PAM_PASS,
+                    CHED_TARGET_HOST, CHED_TARGET_USER, CHED_TARGET_PASS,
+                    CHED_DB_HOST, CHED_DB_PORT, CHED_DB_NAME, CHED_DB_USER, CHED_DB_PASS)
+            if not self.ched_sess.alive:
+                last = None
+                for n in range(1, MAX_RECONNECTS + 1):
+                    try:
+                        self.ched_sess.close()
+                        self.ched_sess.connect()
+                        break
+                    except Exception as e:
+                        last = e
+                        log.error('CHED-подключение %d/%d: %s', n, MAX_RECONNECTS, e)
+                        if n < MAX_RECONNECTS:
+                            time.sleep(5 * n)
+                if not self.ched_sess.alive:
+                    raise RuntimeError(f'CHED: не удалось подключиться: {last}')
+            return self.ched_sess
+
+    def _execute_query(self, sql, mode, limit, profile='sed', schema=''):
+        # CHED2 ходит в другую базу на той же CHED-ВМ
+        db_override = None
+        if profile == 'ched2':
+            db_override = (CHED2_DB_HOST, CHED2_DB_PORT, CHED2_DB_NAME,
+                           CHED_DB_USER, CHED_DB_PASS)
+        res = None
+        for attempt in range(2):
+            try:
+                sess = self._get_session(profile)
+                res = sess.run(sql, mode, limit, schema, db_override)
+                break
+            except RuntimeError as e:
+                if attempt == 0:
+                    log.warning('Сессия (%s) упала: %s — реконнект', profile, e)
+                    try:
+                        if profile in ('ched', 'ched2'):
+                            self.ched_sess = None   # пересоздать при следующем _get_session
+                        elif profile == 'ksp':
+                            self.ksp_sess = None    # пересоздать при следующем _get_session
+                        else:
+                            self._connect()
+                    except Exception as re_err:
+                        res = {'ok': False, 'error': f'Реконнект не удался: {re_err}'}
+                        break
+                else:
+                    res = {'ok': False, 'error': str(e)}
+        return res
+
+    def _handle(self, conn):
+        try:
+            data = b''
+            while True:
+                chunk = conn.recv(65536)
+                if not chunk: break
+                data += chunk
+                if b'\n' in data: break
+
+            req   = json.loads(data.strip())
+            sql   = req.get('sql', '').strip()
+            mode  = req.get('mode', 'preview')
+            limit = int(req.get('limit', 100))
+            profile = req.get('profile', 'sed')
+            if profile not in ('sed', 'ched', 'ched2', 'ksp'):
+                profile = 'sed'
+            schema = (req.get('schema') or '').strip()
+            if schema and not _SCHEMA_RE.match(schema):
+                conn.sendall(json.dumps({'ok': False, 'error': 'Недопустимая схема'}).encode() + b'\n')
+                return
+
+            if sql == '__ping__':
+                conn.sendall(json.dumps({'ok': True, 'pong': True, 'ssh': self.sess.alive}).encode() + b'\n')
+                return
+
+            # Принудительный сброс кэша
+            if sql == '__clear_cache__':
+                cleared = self.cache.clear_all()
+                conn.sendall(json.dumps({'ok': True, 'cleared': cleared}).encode() + b'\n')
+                return
+
+            if not sql:
+                conn.sendall(json.dumps({'ok': False, 'error': 'SQL пустой'}).encode() + b'\n')
+                return
+
+            try:
+                validate_readonly(sql)
+            except ValueError as ve:
+                conn.sendall(json.dumps({'ok': False, 'error': str(ve)}).encode() + b'\n')
+                log.warning('REJECTED sql=%.70s reason=%s', sql, ve)
+                return
+
+            # Ключ кэша/дедупликации учитывает профиль и схему,
+            # иначе CHED и СЭД получат перекрёстные результаты.
+            ckey = f'{profile}\x1f{schema}\x1f{sql}'
+
+            hit = self.cache.get(ckey, mode, limit)
+            if hit:
+                conn.sendall(json.dumps(hit, default=str).encode() + b'\n')
+                log.info('CACHE sql=%.70s', sql)
+                return
+
+            inflight_key = f'{ckey}|{mode}|{limit}'
+            with self._inflight_lock:
+                if inflight_key in self._inflight:
+                    entry    = self._inflight[inflight_key]
+                    is_first = False
+                    log.info('DEDUP ожидаем sql=%.70s', sql)
+                else:
+                    entry    = {'event': threading.Event(), 'result': None}
+                    self._inflight[inflight_key] = entry
+                    is_first = True
+
+            if not is_first:
+                entry['event'].wait(timeout=1820)
+                res = entry['result'] or {'ok': False, 'error': 'Таймаут ожидания'}
+                conn.sendall(json.dumps(res, default=str).encode() + b'\n')
+                return
+
+            res = {'ok': False, 'error': 'Неизвестная ошибка'}
+            try:
+                res = self._execute_query(sql, mode, limit, profile, schema)
+                if res.get('ok'):
+                    self.cache.put(ckey, mode, limit, res)
+                    log.info('OK rows=%d sql=%.70s', res.get('count', 0), sql)
+                else:
+                    log.warning('ERR %s', res.get('error', '?'))
+            finally:
+                with self._inflight_lock:
+                    entry['result'] = res
+                    entry['event'].set()
+                    self._inflight.pop(inflight_key, None)
+
+            conn.sendall(json.dumps(res, default=str).encode() + b'\n')
+
+        except Exception as e:
+            log.exception('Клиент: %s', e)
+            try:
+                conn.sendall(json.dumps({'ok': False, 'error': str(e)}).encode() + b'\n')
+            except: pass
+        finally:
+            try: conn.close()
+            except: pass
+
+    def _keepalive(self):
+        while not self._stop.wait(KEEPALIVE_SEC):
+            if not self.sess.alive:
+                log.info('KA: мёртвая сессия — реконнект')
+                try: self._connect()
+                except Exception as e: log.error('KA реконнект: %s', e)
+            else:
+                if not self.sess.ping():
+                    log.warning('KA ping провалился')
+
+    def run(self):
+        try:
+            self._connect()
+        except Exception as e:
+            log.critical('Первое подключение: %s', e)
+            sys.exit(1)
+
+        try: os.unlink(SOCK_PATH)
+        except: pass
+
+        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        _old_umask = os.umask(0o077)
+        try:
+            srv.bind(SOCK_PATH)
+        finally:
+            os.umask(_old_umask)
+        os.chmod(SOCK_PATH, 0o600)   # только uid веб-сервера (php-fpm/apache)
+        srv.listen(16)
+        srv.settimeout(1.0)
+
+        threading.Thread(target=self._keepalive, daemon=True).start()
+
+        def _sig(s, f):
+            log.info('Сигнал %d', s)
+            self._stop.set()
+        signal.signal(signal.SIGTERM, _sig)
+        signal.signal(signal.SIGINT, _sig)
+
+        log.info('Демон слушает %s (persistent worker)', SOCK_PATH)
+
+        while not self._stop.is_set():
+            try:
+                conn, _ = srv.accept()
+                threading.Thread(target=self._handle, args=(conn,), daemon=True).start()
+            except socket.timeout:
+                continue
+            except Exception as e:
+                if not self._stop.is_set():
+                    log.error('accept: %s', e)
+
+        srv.close()
+        try: os.unlink(SOCK_PATH)
+        except: pass
+        self.sess.close()
+        if self.ched_sess:
+            try: self.ched_sess.close()
+            except Exception: pass
+        if self.ksp_sess:
+            try: self.ksp_sess.close()
+            except Exception: pass
+        log.info('Остановлен')
+
+
+def _pid():
+    try: return int(Path(PID_FILE).read_text().strip())
+    except: return None
+
+def _alive(pid=None):
+    p = pid or _pid()
+    if not p: return False
+    try: os.kill(p, 0); return True
+    except: return False
+
+def cmd_start():
+    if _alive():
+        print(f'Демон уже запущен (PID {_pid()})')
+        return
+    pid = os.fork()
+    if pid > 0:
+        print(f'Демон запускается… Лог: {LOG_FILE}')
+        print(f'Проверить: python3 {sys.argv[0]} --status')
+        return
+    os.setsid()
+    if os.fork() > 0: sys.exit(0)
+    sys.stdout = open(os.devnull, 'w')
+    sys.stderr = open(os.devnull, 'w')
+    sys.stdin  = open(os.devnull, 'r')
+    Path(PID_FILE).write_text(str(os.getpid()))
+    try:
+        Daemon().run()
+    finally:
+        try: os.unlink(PID_FILE)
+        except: pass
+
+def cmd_stop():
+    pid = _pid()
+    if not _alive(pid):
+        print('Демон не запущен')
+        try: os.unlink(PID_FILE)
+        except: pass
+        return
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(30):
+        time.sleep(0.5)
+        if not _alive(pid):
+            print(f'Демон (PID {pid}) остановлен')
+            try: os.unlink(PID_FILE)
+            except: pass
+            return
+    print(f'Не остановился, принудительно: kill -9 {pid}')
+
+def cmd_status():
+    pid = _pid()
+    if not _alive(pid):
+        print('✗ Демон не запущен')
+        if os.path.exists(LOG_FILE):
+            print(f'\nПоследние строки лога ({LOG_FILE}):')
+            lines = Path(LOG_FILE).read_text().splitlines()
+            for l in lines[-10:]: print(' ', l)
+        return
+    print(f'• Демон запущен (PID {pid})')
+    if os.path.exists(SOCK_PATH):
+        try:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.settimeout(5)
+            s.connect(SOCK_PATH)
+            s.sendall(b'{"sql":"__ping__","mode":"preview","limit":1}\n')
+            r = json.loads(s.recv(1024).strip())
+            s.close()
+            ssh_ok = r.get('ssh', '?')
+            print(f'✓ Сокет отвечает | SSH: {"активен" if ssh_ok else "не активен"}')
+        except Exception as e:
+            print(f'✗ Сокет не отвечает: {e}')
+    else:
+        print('⏳ Сокет ещё не создан (SSH подключается…)')
+        print(f'   Лог: tail -f {LOG_FILE}')
+
+def cmd_logs(n=30):
+    if not os.path.exists(LOG_FILE):
+        print('Лог пуст')
+        return
+    lines = Path(LOG_FILE).read_text().splitlines()
+    print(f'--- последние {n} строк {LOG_FILE} ---')
+    for l in lines[-n:]: print(l)
+
+def cmd_restart():
+    cmd_stop()
+    time.sleep(2)
+    cmd_start()
+
+def cmd_foreground():
+    Path(PID_FILE).write_text(str(os.getpid()))
+    try:
+        Daemon().run()
+    finally:
+        try: os.unlink(PID_FILE)
+        except: pass
+
+
+if __name__ == '__main__':
+    import argparse
+    ap = argparse.ArgumentParser(description='pam_daemon — SSH-демон для СЭД')
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument('--start',      action='store_true')
+    g.add_argument('--stop',       action='store_true')
+    g.add_argument('--restart',    action='store_true')
+    g.add_argument('--status',     action='store_true')
+    g.add_argument('--logs',       action='store_true')
+    g.add_argument('--foreground', action='store_true', help='Запуск в терминале (отладка)')
+    args = ap.parse_args()
+
+    if args.start:        cmd_start()
+    elif args.stop:       cmd_stop()
+    elif args.restart:    cmd_restart()
+    elif args.status:     cmd_status()
+    elif args.logs:       cmd_logs()
+    elif args.foreground: cmd_foreground()
