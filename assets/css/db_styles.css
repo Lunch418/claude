@@ -2043,3 +2043,27 @@ button[title="Закрыть"]:hover, button[title="Закрыть панель"
     inset 0 1px 0 rgba(255, 255, 255, .06);
 }
 [data-theme="dark"] .login-overlay::after { filter: blur(62px); }
+
+/* ── LOGIN: живые «орбы» на фоне (CSP-safe, accent-aware) ───────── */
+.login-orbs { position: absolute; inset: 0; overflow: hidden; z-index: 0; pointer-events: none; }
+.login-orb {
+  position: absolute; border-radius: 50%; filter: blur(44px); opacity: .55;
+  background: radial-gradient(circle at 32% 30%,
+    color-mix(in srgb, var(--c-accent) 85%, #fff),
+    color-mix(in srgb, var(--c-accent-h) 60%, transparent));
+  will-change: transform;
+}
+.login-orb.o1 { width: 360px; height: 360px; left: -70px;  top: -50px;  animation: orb-a 19s ease-in-out infinite; }
+.login-orb.o2 { width: 280px; height: 280px; right: -50px; top: 8%;     animation: orb-b 23s ease-in-out infinite;
+  background: radial-gradient(circle at 32% 30%, color-mix(in srgb, var(--c-accent-h) 85%, #fff), transparent); }
+.login-orb.o3 { width: 320px; height: 320px; left: 10%;    bottom: -90px; animation: orb-c 27s ease-in-out infinite; }
+.login-orb.o4 { width: 240px; height: 240px; right: 12%;   bottom: -50px; animation: orb-a 21s ease-in-out infinite reverse;
+  background: radial-gradient(circle at 32% 30%, color-mix(in srgb, var(--c-accent) 80%, #fff), transparent); }
+@keyframes orb-a { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(64px,44px) scale(1.12); } }
+@keyframes orb-b { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-52px,52px) scale(1.10); } }
+@keyframes orb-c { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(44px,-52px) scale(1.15); } }
+[data-theme="dark"] .login-orb { opacity: .42; }
+/* уважаем системную настройку «меньше движения» */
+@media (prefers-reduced-motion: reduce) {
+  .login-orb, .login-overlay, .login-overlay::after, .login-card::before { animation: none !important; }
+}
