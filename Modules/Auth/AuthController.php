@@ -32,6 +32,8 @@ class AuthController
             )");
             // ФИО для отображения в админ-панели (для старых таблиц — добавляем)
             $pdo->exec("ALTER TABLE sed_2fa ADD COLUMN IF NOT EXISTS user_name TEXT");
+            // Последний использованный счётчик TOTP — anti-replay (V-09)
+            $pdo->exec("ALTER TABLE sed_2fa ADD COLUMN IF NOT EXISTS last_totp_ctr BIGINT NOT NULL DEFAULT 0");
             return $pdo;
         } catch (\Throwable $e) {
             error_log('[Auth::2fa] DB connect error: ' . $e->getMessage());
@@ -44,7 +46,7 @@ class AuthController
     {
         $db = $this->tfaDb();
         if (!$db) return null;
-        $st = $db->prepare("SELECT secret, enabled FROM sed_2fa WHERE user_key = ?");
+        $st = $db->prepare("SELECT secret, enabled, last_totp_ctr FROM sed_2fa WHERE user_key = ?");
         $st->execute([$key]);
         $row = $st->fetch();
         return $row ?: null;
@@ -158,16 +160,19 @@ class AuthController
 
             if ($pending['mode'] === 'enroll') {
                 $secret = (string) $pending['secret'];
-                if (!Totp::verify($secret, $code)) {
+                $ctr = Totp::matchCounter($secret, $code);
+                if ($ctr === null) {
                     $this->json(['ok' => false, 'error' => 'Неверный код']);
                     return;
                 }
                 $db = $this->tfaDb();
                 if (!$db) { $this->json(['ok' => false, 'error' => 'Лог-БД недоступна']); return; }
-                $st = $db->prepare("INSERT INTO sed_2fa (user_key, secret, enabled, user_name)
-                    VALUES (?, ?, TRUE, ?)
-                    ON CONFLICT (user_key) DO UPDATE SET secret = EXCLUDED.secret, enabled = TRUE, user_name = EXCLUDED.user_name");
-                $st->execute([$key, $secret, (string) $pending['name']]);
+                // last_totp_ctr = совпавший счётчик — код привязки нельзя
+                // сразу переиспользовать как код входа (V-09).
+                $st = $db->prepare("INSERT INTO sed_2fa (user_key, secret, enabled, user_name, last_totp_ctr)
+                    VALUES (?, ?, TRUE, ?, ?)
+                    ON CONFLICT (user_key) DO UPDATE SET secret = EXCLUDED.secret, enabled = TRUE, user_name = EXCLUDED.user_name, last_totp_ctr = EXCLUDED.last_totp_ctr");
+                $st->execute([$key, $secret, (string) $pending['name'], $ctr]);
                 $this->grantSession($key, (string) $pending['name'], (bool) $pending['isAdmin'], !empty($pending['mobile']));
                 return;
             }
@@ -178,9 +183,21 @@ class AuthController
                 $this->json(['ok' => false, 'error' => '2FA не настроен']);
                 return;
             }
-            if (!Totp::verify((string) $row['secret'], $code)) {
+            $ctr = Totp::matchCounter((string) $row['secret'], $code);
+            if ($ctr === null) {
                 $this->json(['ok' => false, 'error' => 'Неверный код']);
                 return;
+            }
+            // anti-replay (V-09): код с этим (или более ранним) счётчиком уже
+            // использован — не принимаем повторно в пределах окна ±90с.
+            if ((int) ($row['last_totp_ctr'] ?? 0) >= $ctr) {
+                $this->json(['ok' => false, 'error' => 'Код уже использован, дождитесь нового']);
+                return;
+            }
+            $db = $this->tfaDb();
+            if ($db) {
+                $db->prepare("UPDATE sed_2fa SET last_totp_ctr = ? WHERE user_key = ?")
+                   ->execute([$ctr, $key]);
             }
             $this->grantSession($key, (string) $pending['name'], (bool) $pending['isAdmin'], !empty($pending['mobile']));
 

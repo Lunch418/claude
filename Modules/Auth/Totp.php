@@ -25,15 +25,25 @@ class Totp
     /** Проверка кода с окном ±$window интервалов (по умолчанию ±1 = ±30с). */
     public static function verify(string $secret, string $code, int $window = 1): bool
     {
+        return self::matchCounter($secret, $code, $window) !== null;
+    }
+
+    /**
+     * Возвращает совпавший счётчик времени (floor(time/30)) или null.
+     * Нужен для anti-replay: вызывающий код отклоняет счётчик, который
+     * уже был использован (V-09).
+     */
+    public static function matchCounter(string $secret, string $code, int $window = 1): ?int
+    {
         $code = preg_replace('/\D/', '', $code);
-        if (strlen($code) !== self::DIGITS) return false;
+        if (strlen($code) !== self::DIGITS) return null;
         $t = (int) floor(time() / self::PERIOD);
         for ($i = -$window; $i <= $window; $i++) {
             if (hash_equals(self::codeAt($secret, $t + $i), $code)) {
-                return true;
+                return $t + $i;
             }
         }
-        return false;
+        return null;
     }
 
     /** Код для конкретного счётчика времени. */
