@@ -3,9 +3,9 @@
 .env.*
 !.env.example
 
-# Экспорт и рантайм-артефакты
+# Экспорт и рантайм-артефакты (структуру каталога сохраняем,
+# .htaccess/.gitkeep трекаем, сами выгрузки — нет)
 /storage/exports/*.csv
-/storage/
 
 # Python
 __pycache__/
