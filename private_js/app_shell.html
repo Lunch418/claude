@@ -18,29 +18,29 @@
       border-radius:var(--r); box-shadow:var(--sh-lg); min-width:170px; overflow:hidden;
     ">
       <div style="padding:6px 10px 4px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--c-text-3)">База данных</div>
-      <button class="db-switch-item active" id="dbItemRemote" onclick="switchDb('remote')">
+      <button class="db-switch-item active" id="dbItemRemote" data-act="switchDb" data-db="remote">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
         <span>doc <span style="color:var(--c-text-3);font-size:11px">— SED</span></span>
       </button>
-      <button class="db-switch-item" id="dbItemLocal" onclick="switchDb('local')">
+      <button class="db-switch-item" id="dbItemLocal" data-act="switchDb" data-db="local">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
         <span>sed_log <span style="color:var(--c-text-3);font-size:11px">— LOCAL</span></span>
       </button>
-      <button class="db-switch-item" id="dbItemChed" onclick="switchDb('ched')">
+      <button class="db-switch-item" id="dbItemChed" data-act="switchDb" data-db="ched">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
         <span>CHED <span style="color:var(--c-text-3);font-size:11px">— CHED</span></span>
       </button>
-      <button class="db-switch-item" id="dbItemChed2" onclick="switchDb('ched2')">
+      <button class="db-switch-item" id="dbItemChed2" data-act="switchDb" data-db="ched2">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
         <span>CHED2 <span style="color:var(--c-text-3);font-size:11px">— ESPH</span></span>
       </button>
-      <button class="db-switch-item" id="dbItemKsp" onclick="switchDb('ksp')">
+      <button class="db-switch-item" id="dbItemKsp" data-act="switchDb" data-db="ksp">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
         <span>КСП <span style="color:var(--c-text-3);font-size:11px">— KSP</span></span>
       </button>
     </div>
   </div>
-  <select id="chedSchemaSelect" onchange="onChedSchemaChange(this.value)" title="Схема CHED"
+  <select id="chedSchemaSelect" data-act-change="chedSchema" title="Схема CHED"
     style="display:none;margin-left:6px;font-size:11.5px;padding:3px 9px;border:1px solid var(--c-border);
            border-radius:var(--r);background:var(--c-surface-2);color:var(--c-text-2);max-width:180px;cursor:pointer">
   </select>
@@ -105,7 +105,7 @@
         </div>
       </div>
       <div id="localSqlOpenWrap" style="display:none;padding:8px 12px 4px">
-        <button id="localSqlOpenBtn" class="btn btn-outline" onclick="openLocalSqlModal()"
+        <button id="localSqlOpenBtn" class="btn btn-outline" data-act="openLocalSqlModal"
           style="width:100%;font-size:12px;justify-content:center;gap:6px">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
@@ -195,8 +195,8 @@
           Загрузить
         </button>
         <button class="btn btn-outline" id="btnCancelQuery" 
-  style="display:none;color:var(--c-red);border-color:var(--c-red-border)" 
-  onclick="cancelQuery()">
+  style="display:none;color:var(--c-red);border-color:var(--c-red-border)"
+  data-act="cancelQuery">
   Отмена
 </button>
         <button class="btn btn-ghost" id="btnReset" title="Сбросить фильтры">
@@ -283,7 +283,7 @@
           Выполнить
         </button>
         <button class="btn btn-outline" id="btnClearSql">Очистить</button>
-        <button class="btn btn-ghost" id="btnSaveQuery" title="Сохранить запрос" onclick="openSaveQueryModal()" style="color:var(--c-text-2)">
+        <button class="btn btn-ghost" id="btnSaveQuery" title="Сохранить запрос" data-act="openSaveQueryModal" style="color:var(--c-text-2)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
             <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
@@ -380,7 +380,7 @@
     <div id="exportAllProgress" style="display:none;font-size:12.5px;color:var(--c-text-3);margin-bottom:10px"></div>
 
     <div class="modal-actions">
-      <button class="btn btn-ghost" id="btnExportCancel" onclick="closeModal()" style="color:var(--c-text-3)">Отмена</button>
+      <button class="btn btn-ghost" id="btnExportCancel" data-act="closeModal" style="color:var(--c-text-3)">Отмена</button>
       <button class="btn btn-success" id="exportConfirmBtn">⬇ Скачать</button>
     </div>
   </div>
@@ -439,8 +439,8 @@
       "></textarea>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeEditSavedModal()" style="color:var(--c-text-3)">Отмена</button>
-      <button class="btn btn-primary" onclick="confirmEditSaved()">Сохранить изменения</button>
+      <button class="btn btn-ghost" data-act="closeEditSavedModal" style="color:var(--c-text-3)">Отмена</button>
+      <button class="btn btn-primary" data-act="confirmEditSaved">Сохранить изменения</button>
     </div>
   </div>
 </div>
@@ -460,8 +460,8 @@
       white-space:pre;margin-bottom:12px;
     "></div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeSaveQueryModal()" style="color:var(--c-text-3)">Отмена</button>
-      <button class="btn btn-primary" id="btnConfirmSave" onclick="confirmSaveQuery()">
+      <button class="btn btn-ghost" data-act="closeSaveQueryModal" style="color:var(--c-text-3)">Отмена</button>
+      <button class="btn btn-primary" id="btnConfirmSave" data-act="confirmSaveQuery">
         Сохранить
       </button>
     </div>
@@ -519,7 +519,7 @@
         <h3 style="margin:0;font-size:15px">SQL — локальная БД <span style="color:var(--c-text-3);font-weight:400;font-size:13px">sed_log</span></h3>
         <p style="margin:3px 0 0;font-size:11.5px;color:var(--c-text-3)">Только SELECT. Таблицы: sed_query_log, sed_user_prefs</p>
       </div>
-      <button class="btn btn-ghost" onclick="closeLocalSqlModal()">✕</button>
+      <button class="btn btn-ghost" data-act="closeLocalSqlModal">✕</button>
     </div>
     <div style="flex-shrink:0">
       <textarea id="localSqlEditor" rows="5" style="
@@ -530,13 +530,13 @@
       " placeholder="SELECT * FROM sed_query_log ORDER BY ts DESC LIMIT 100">SELECT * FROM sed_query_log ORDER BY ts DESC LIMIT 100</textarea>
     </div>
     <div style="display:flex;gap:8px;flex-shrink:0;align-items:center">
-      <button class="btn btn-primary" id="btnRunLocalSql" onclick="runLocalSql()">
+      <button class="btn btn-primary" id="btnRunLocalSql" data-act="runLocalSql">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Выполнить
       </button>
       <span id="localSqlStatus" style="font-size:12px;color:var(--c-text-3)"></span>
       <div style="flex:1"></div>
-      <button class="btn btn-ghost" onclick="closeLocalSqlModal()">Закрыть</button>
+      <button class="btn btn-ghost" data-act="closeLocalSqlModal">Закрыть</button>
     </div>
     <div id="localSqlResult" style="
       flex:1;overflow:auto;border:1px solid var(--c-border);border-radius:var(--r);
@@ -559,7 +559,7 @@
         <span id="gqbSql" class="gqb-sql"></span>
       </div>
     </div>
-    <button id="gqbCancel" onclick="cancelQuery()">
+    <button id="gqbCancel" data-act="cancelQuery">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>

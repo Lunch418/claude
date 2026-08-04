@@ -260,18 +260,18 @@ function renderParamFields(t, values) {
       case 'org':
         input = buildOrgComboHTML(p, val); break;
       case 'date':
-        input = `<input type="date" id="param_${p.key}" value="${escHtml(val)}" oninput="onParamInput('${p.key}',this.value)">`; break;
+        input = `<input type="date" id="param_${p.key}" value="${escHtml(val)}" data-act-input="param" data-key="${p.key}">`; break;
       case 'int':
-        input = `<input type="number" id="param_${p.key}" value="${escHtml(val)}" placeholder="${p.default||''}" ${w} oninput="onParamInput('${p.key}',this.value)">`; break;
+        input = `<input type="number" id="param_${p.key}" value="${escHtml(val)}" placeholder="${p.default||''}" ${w} data-act-input="param" data-key="${p.key}">`; break;
       case 'like':
       case 'text':
-        input = `<input type="text" id="param_${p.key}" value="${escHtml(val)}" placeholder="${p.hint||''}" ${w||'style="width:180px"'} oninput="onParamInput('${p.key}',this.value)">`; break;
+        input = `<input type="text" id="param_${p.key}" value="${escHtml(val)}" placeholder="${p.hint||''}" ${w||'style="width:180px"'} data-act-input="param" data-key="${p.key}">`; break;
       case 'ids':
         input = `<textarea id="param_${p.key}" placeholder="1,2,3 или по одному на строку" rows="2"
           style="height:52px;resize:vertical;font-family:var(--font-mono);font-size:12px;padding:6px 10px;border:1px solid var(--c-border);border-radius:var(--r-sm);outline:none;transition:border-color .15s;width:${p.width||'220px'}"
-          oninput="onParamInput('${p.key}',this.value)">${escHtml(val)}</textarea>`; break;
+          data-act-input="param" data-key="${p.key}">${escHtml(val)}</textarea>`; break;
       default:
-        input = `<input type="text" id="param_${p.key}" value="${escHtml(val)}" ${w} oninput="onParamInput('${p.key}',this.value)">`;
+        input = `<input type="text" id="param_${p.key}" value="${escHtml(val)}" ${w} data-act-input="param" data-key="${p.key}">`;
     }
     const hint = p.hint ? `<div class="param-hint">${escHtml(p.hint)}</div>` : '';
     return `<div class="param-field${reqClass}" id="pfield_${p.key}">
@@ -299,7 +299,7 @@ function buildComboItems(key, q, selectedVal) {
     : state.orgList;
   let manualOpt = '';
   if (lq && /^\d+$/.test(lq) && !items.find(o => String(o.id) === lq)) {
-    manualOpt = `<div class="org-combo-opt" data-val="${lq}" onmousedown="comboSelect(event,'${key}','${lq}')" onmouseenter="comboHover(this)" style="font-style:italic;color:var(--c-accent)">Применить ID: <strong>${lq}</strong></div>`;
+    manualOpt = `<div class="org-combo-opt" data-val="${lq}" data-key="${key}" data-act-mousedown="comboSelect" data-act-mouseover="comboHover" style="font-style:italic;color:var(--c-accent)">Применить ID: <strong>${lq}</strong></div>`;
   }
   if (!items.length && !manualOpt) return '<div class="org-combo-msg">Не найдено · введите ID вручную</div>';
   const shown = items.slice(0, 120);
@@ -307,22 +307,23 @@ function buildComboItems(key, q, selectedVal) {
   return manualOpt + shown.map(o => {
     const lbl = escHtml(((o.short_name || o.name) || '').substring(0, 52));
     const cls = String(o.id) === String(selectedVal) ? ' sel' : '';
-    return `<div class="org-combo-opt${cls}" data-val="${o.id}" onmousedown="comboSelect(event,'${key}','${o.id}')" onmouseenter="comboHover(this)">${lbl} <span style="color:var(--c-text-3);font-size:11px">(${o.id})</span></div>`;
+    return `<div class="org-combo-opt${cls}" data-val="${o.id}" data-key="${key}" data-act-mousedown="comboSelect" data-act-mouseover="comboHover">${lbl} <span style="color:var(--c-text-3);font-size:11px">(${o.id})</span></div>`;
   }).join('') + more;
 }
 
 function buildOrgComboHTML(p, val) {
   const displayVal = val ? orgLabel(val) : '— выберите —';
   return `<div class="org-combo" id="combo_${p.key}" data-val="${escHtml(val || '')}">
-    <div class="org-combo-val" onclick="comboToggle('${p.key}')">
+    <div class="org-combo-val" data-act="comboToggle" data-key="${p.key}">
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${escHtml(displayVal)}</span>
       <span class="org-combo-arrow">▾</span>
     </div>
     <div class="org-combo-drop">
       <input class="org-combo-search" type="text" placeholder="Поиск или введите ID..."
         id="combosearch_${p.key}"
-        oninput="comboFilter('${p.key}',this.value)"
-        onkeydown="comboKeyDown('${p.key}',event)">
+        data-key="${p.key}"
+        data-act-input="comboFilter"
+        data-act-keydown="comboKeyDown">
       <div class="org-combo-list" id="combolist_${p.key}"></div>
     </div>
   </div>`;
@@ -555,4 +556,18 @@ function saveTmplParams(i, vals) {
 }
 function loadTmplParams(i) {
   try { const s = sessionStorage.getItem(`sed_tp_${i}`); return s ? JSON.parse(s) : {}; } catch (_) { return {}; }
+}
+
+// ── Действия параметров/комбобокса для делегирования (V-06) ──────
+// Инлайновые on*-обработчики заменены на data-act*; ключ/значение —
+// из data-* (data-key, data-val), событие/элемент прокидываются.
+if (typeof window.sedRegisterActions === 'function') {
+  window.sedRegisterActions({
+    param:        function (el) { onParamInput(el.dataset.key, el.value); },
+    comboToggle:  function (el) { comboToggle(el.dataset.key); },
+    comboFilter:  function (el) { comboFilter(el.dataset.key, el.value); },
+    comboKeyDown: function (el, e) { comboKeyDown(el.dataset.key, e); },
+    comboSelect:  function (el, e) { comboSelect(e, el.dataset.key, el.dataset.val); },
+    comboHover:   function (el) { comboHover(el); },
+  });
 }

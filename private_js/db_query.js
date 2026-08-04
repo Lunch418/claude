@@ -334,7 +334,7 @@ async function _pollUntilDone(jobId, t0) {
 }
 
 // ── Отмена запроса ────────────────────────────────────────────
-// Вызывается кнопкой «Отмена» в тулбаре (onclick="cancelQuery()")
+// Вызывается кнопкой «Отмена» в тулбаре (data-act="cancelQuery")
 async function cancelQuery() {
   const jobId = _currentJobId;
   _currentJobId = null; // сигнал _pollUntilDone что надо остановиться
@@ -901,12 +901,12 @@ function checkSqlDraft() {
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         ↩ Несохранённый запрос: <strong>${escHtml(preview)}</strong>
       </span>
-      <button onclick="restoreSqlDraft()" style="padding:2px 10px;border-radius:var(--r-sm);
+      <button data-act="restoreSqlDraft" style="padding:2px 10px;border-radius:var(--r-sm);
         border:1px solid var(--c-accent-border);background:var(--c-accent-bg);
         color:var(--c-accent);cursor:pointer;font-size:11.5px;font-weight:500">
         Восстановить
       </button>
-      <button onclick="document.getElementById('sqlDraftBanner').remove();sessionStorage.removeItem('sed_sql_draft')"
+      <button data-act="dismissSqlDraft"
         style="padding:2px 6px;border-radius:var(--r-sm);border:1px solid var(--c-border);
         background:transparent;color:var(--c-text-3);cursor:pointer;font-size:11px">✕</button>
     `;
@@ -927,4 +927,18 @@ function restoreSqlDraft() {
     document.getElementById('sqlDraftBanner')?.remove();
     showToast('Запрос восстановлен');
   } catch (_) {}
+}
+
+// Закрыть баннер черновика (было инлайновым onclick, V-06)
+function dismissSqlDraft() {
+  document.getElementById('sqlDraftBanner')?.remove();
+  sessionStorage.removeItem('sed_sql_draft');
+}
+
+// Действия баннера черновика для делегирования
+if (typeof window.sedRegisterActions === 'function') {
+  window.sedRegisterActions({
+    restoreSqlDraft: function () { restoreSqlDraft(); },
+    dismissSqlDraft: function () { dismissSqlDraft(); },
+  });
 }

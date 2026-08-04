@@ -178,7 +178,7 @@ function _renderLoginList() {
     return `<div class="org-combo-opt${cls}"
       data-id="${escHtml(String(u.id))}"
       data-name="${escHtml(u.name || u.login || '')}"
-      onmousedown="loginComboSelectEl(event,this)">
+      data-act-mousedown="loginCombo">
       ${escHtml(u.name || u.login || '')}
     </div>`;
   }).join('');

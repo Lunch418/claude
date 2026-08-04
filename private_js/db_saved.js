@@ -91,7 +91,7 @@ function renderSavedList(filter = '') {
         <div class="tmpl-title" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
           ${escHtml(s.name)}
         </div>
-        <div style="display:flex;gap:3px;flex-shrink:0" onclick="event.stopPropagation()">
+        <div style="display:flex;gap:3px;flex-shrink:0">
           <button class="saved-btn-load" data-id="${s.id}"
             style="background:none;border:none;cursor:pointer;color:var(--c-accent);font-size:12px;padding:0 3px"
             title="Загрузить в редактор">▶</button>
