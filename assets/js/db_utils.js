@@ -1,6 +1,52 @@
 // ════════════════════════════════════════════════════════════════
-//  db_utils.js — буфер обмена, тосты
+//  db_utils.js — буфер обмена, тосты, делегирование событий
 // ════════════════════════════════════════════════════════════════
+
+// ── Делегирование событий (CSP: без инлайновых обработчиков, V-06) ──
+// Элементы объявляют действие атрибутом data-act (click) или
+// data-act-<event> (change/input/mousedown/keydown/mouseover). Значение —
+// имя действия в реестре SED_ACTIONS. Обработчик получает (element, event).
+// Аргументы читаются из data-* самого элемента. Один набор слушателей на
+// document переживает innerHTML-инъекции и покрывает динамический контент.
+(function () {
+  'use strict';
+  window.SED_ACTIONS = window.SED_ACTIONS || {};
+
+  // [тип события, ключ dataset, css-селектор атрибута]
+  var BINDINGS = [
+    ['click',     'act',          'data-act'],
+    ['change',    'actChange',    'data-act-change'],
+    ['input',     'actInput',     'data-act-input'],
+    ['mousedown', 'actMousedown', 'data-act-mousedown'],
+    ['keydown',   'actKeydown',   'data-act-keydown'],
+    ['mouseover', 'actMouseover', 'data-act-mouseover'],
+  ];
+
+  function makeHandler(dsKey, sel) {
+    return function (e) {
+      var start = e.target;
+      if (!(start instanceof Element)) {
+        start = start && start.parentElement ? start.parentElement : null;
+      }
+      var el = start ? start.closest('[' + sel + ']') : null;
+      if (!el) return;
+      var fn = window.SED_ACTIONS[el.dataset[dsKey]];
+      if (typeof fn === 'function') fn(el, e);
+    };
+  }
+
+  if (!window.__sedDelegationReady) {
+    window.__sedDelegationReady = true;
+    BINDINGS.forEach(function (b) {
+      document.addEventListener(b[0], makeHandler(b[1], b[2]));
+    });
+  }
+
+  // Модули регистрируют свои действия: sedRegisterActions({name: fn(el,e)})
+  window.sedRegisterActions = function (obj) {
+    Object.assign(window.SED_ACTIONS, obj || {});
+  };
+})();
 
 // ── Копирование в буфер обмена ────────────────────────────────
 async function copyToClipboard(text, toastMsg = 'Скопировано!') {

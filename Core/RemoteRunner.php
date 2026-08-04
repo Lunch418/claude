@@ -111,6 +111,21 @@ class RemoteRunner {
     }
 
     /**
+     * Нейтрализация CSV/formula injection (V-03): значение, начинающееся с
+     * =,+,-,@,\t,\r, префиксуем апострофом — Excel/LibreOffice не вычислят
+     * формулу, само значение сохраняется. Единый источник правды для
+     * серверного CSV (используется RemoteController::export).
+     */
+    public static function csvSafeCell($v): string
+    {
+        $s = (string) ($v ?? '');
+        if ($s !== '' && in_array($s[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+            return "'" . $s;
+        }
+        return $s;
+    }
+
+    /**
      * @return array{ok: bool, columns?: array, rows?: array, count?: int, error?: string}
      */
     public function runQuery(string $sql, string $mode = 'preview', int $limit = 100, string $profile = 'sed', string $schema = ''): array {

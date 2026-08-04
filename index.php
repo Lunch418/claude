@@ -118,7 +118,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
+// script-src без 'unsafe-inline' (V-06): весь JS вынесен во внешние файлы,
+// обработчики — через делегирование (data-act). style-src 'unsafe-inline'
+// оставлен как компромисс (в разметке много инлайн-стилей).
+header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
 header('Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=(), bluetooth=()');
 
 // HSTS — только если соединение HTTPS

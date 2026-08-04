@@ -1605,3 +1605,23 @@ async function init() {
   }
   checkSqlDraft();
 }
+
+// ── Регистрация действий шелла для делегирования (V-06) ──────────
+// Инлайновые on*-обработчики app_shell.html заменены на data-act;
+// функции глобальные, вызываются лениво (к клику все модули загружены).
+if (typeof window.sedRegisterActions === 'function') {
+  window.sedRegisterActions({
+    switchDb:            function (el) { switchDb(el.dataset.db); },
+    chedSchema:          function (el) { onChedSchemaChange(el.value); },
+    openLocalSqlModal:   function () { openLocalSqlModal(); },
+    closeLocalSqlModal:  function () { closeLocalSqlModal(); },
+    runLocalSql:         function () { runLocalSql(); },
+    cancelQuery:         function () { cancelQuery(); },
+    openSaveQueryModal:  function () { openSaveQueryModal(); },
+    closeModal:          function () { closeModal(); },
+    closeEditSavedModal: function () { closeEditSavedModal(); },
+    confirmEditSaved:    function () { confirmEditSaved(); },
+    closeSaveQueryModal: function () { closeSaveQueryModal(); },
+    confirmSaveQuery:    function () { confirmSaveQuery(); },
+  });
+}

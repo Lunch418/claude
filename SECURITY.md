@@ -13,7 +13,7 @@
 | V-03 | CSV/formula injection в экспорте                    | ✅ исправлено в коде | PHP + оба remote-скрипта |
 | V-04 | Обход блэклиста SQL (`pg_sleep_for`, `pg_cancel_backend`) | ✅ исправлено в коде | `RemoteRunner::assertReadOnly` |
 | V-05 | Слабый фильтр в `LocalQueryController`              | ✅ исправлено в коде | общий валидатор |
-| V-06 | CSP `script-src 'unsafe-inline'`                    | 🔶 запланировано (см. ниже) | `index.php` + фронт |
+| V-06 | CSP `script-src 'unsafe-inline'`                    | ✅ исправлено в коде | `db_viewer.html` meta + `index.php` + делегирование |
 | V-07 | IDOR в `poll()`/`cancel()`                          | ✅ исправлено в коде | `RemoteController` |
 | V-08 | `System:clearCache` без admin-гейта                | ✅ исправлено в коде | `SystemController` |
 | V-09 | TOTP без anti-replay                                | ✅ исправлено в коде | `Totp` + `AuthController` |
@@ -79,35 +79,49 @@ curl -s -o /dev/null -w "%{http_code}\n" https://<хост>/storage/exports/x.cs
 
 ---
 
-## V-06 — убрать `script-src 'unsafe-inline'` (запланировано)
+## V-06 — `script-src 'unsafe-inline'` убран (исправлено)
 
-Требует рефакторинга фронта, не однострочник. Текущая защита от XSS —
-ручной `escHtml`; CSP как второй рубеж пока отключён `'unsafe-inline'`.
+CSP теперь защищает и сам документ, и API:
+- `db_viewer.html` несёт `<meta http-equiv="Content-Security-Policy">` с
+  `script-src 'self'` (документ отдаётся статикой, заголовок из `index.php`
+  к нему не применялся);
+- в `index.php` `'unsafe-inline'` для `script-src` снят (`style-src
+  'unsafe-inline'` оставлен как компромисс — в разметке много инлайн-стилей).
 
-Шаги для полного закрытия:
+Чтобы это не сломало интерфейс, весь инлайн-JS вынесен:
+- инлайновые `<script>` → `assets/js/db_boot.js` (тема) и
+  `assets/js/db_init.js` (guard `showApp`, `authInit`, тумблер пароля);
+- единый делегатор событий в `assets/js/db_utils.js`: элементы объявляют
+  действие через `data-act` / `data-act-<event>`, реестр `SED_ACTIONS`,
+  слушатели на `document` переживают `innerHTML`-инъекции;
+- статические и динамические обработчики (`app_shell.html`, `db_auth.js`,
+  `db_query.js`, `db_saved.js`, `db_template.js`) переведены на `data-act*`.
 
-1. Вынести инлайновые `<script>` из `db_viewer.html` (bootstrap темы,
-   обёртка `showApp`, `DOMContentLoaded`) в отдельный `assets/js/db_boot.js`.
-2. Заменить инлайновые обработчики (`onclick=`, `onchange=`, `onmouseover=`,
-   `onerror=`) в `db_viewer.html` и `private_js/app_shell.html` на
-   `addEventListener` (делегирование событий). Инвентарь: `switchDb`,
-   `onChedSchemaChange`, `openLocalSqlModal`, `runLocalSql`, кнопки модалок
-   сохранения/редактирования, `cancelQuery`, переключатель пароля.
-3. Заменить заголовок CSP на nonce-схему:
-   ```php
-   $nonce = base64_encode(random_bytes(16));
-   header("Content-Security-Policy: default-src 'self'; "
-        . "script-src 'self' 'nonce-{$nonce}'; "
-        . "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-        . "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
-   ```
-   и проставить `nonce="<?= $nonce ?>"` оставшимся инлайн-скриптам.
-4. Тестировать в браузере (консоль на CSP-violations) — без прогона
-   легко пропустить сломанный обработчик.
+Проверяется автоматически (`tests/`): браузерный тест на Chromium
+подтверждает ноль `script-src` CSP-violations на экране логина и в оболочке
+приложения и работу делегированных действий.
 
-> Изменение отложено намеренно: править CSP вслепую на рабочем проде
-> рискованно (десятки инлайн-обработчиков). Делать отдельной задачей
-> с браузерным тестом.
+> Мёртвые дубликаты `assets/js/{db_query,db_saved,db_template,db_app,
+> db_columns,db_export,db_filter,db_fk,db_prefs,db_sqledit,db_table}` **удалены**
+> (не грузились нигде). Живой путь приложения — `private_js/*` через
+> `Asset:script`; живой путь логина — `assets/js/{db_utils,qrcode,db_2fa,
+> db_auth,db_boot,db_init}` (6 файлов; проверяется `tests/run.sh`).
+>
+> `style-src 'unsafe-inline'` пока оставлен (осознанный компромисс). Закрытие —
+> отдельная крупная задача: вынести ~223 инлайновых `style="..."` (в HTML и в
+> генерируемом `innerHTML`) в классы, 2 инлайновых `<style>` и 5 создаваемых
+> JS `<style>` — во внешний CSS, затем убрать `'unsafe-inline'` из style-src
+> в `db_viewer.html` и `index.php`. `.style.x=`/`cssText` (CSSOM) трогать не
+> нужно — они не подпадают под CSP. Выгода мала (инъекция скриптов уже закрыта
+> V-06), риск регрессий высок — делать отдельно с полным браузерным тестом.
+
+## Тесты (`tests/`)
+
+`bash tests/run.sh` — static (php -l, компиляция Python + парсинг встроенных
+remote-скриптов, node --check, проверка отсутствия инлайн-обработчиков и
+строгого CSP), unit (PHP: валидатор/CSV/TOTP; Python: `validate_readonly` и
+`_csv_safe`), browser (Playwright/Chromium: CSP-violations + делегирование).
+Интеграция SSH/PAM/PostgreSQL не запускается (нужны `.env`/бастион/сервер БД).
 
 ---
 

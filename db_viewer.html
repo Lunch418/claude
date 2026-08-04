@@ -2,33 +2,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- CSP на самом документе (V-06): db_viewer.html отдаётся статикой, поэтому
+     заголовок из index.php к нему не применяется. script-src 'self' — без
+     'unsafe-inline': весь JS вынесен во внешние файлы, обработчики — через
+     делегирование. style-src 'unsafe-inline' оставлен (много инлайн-стилей). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'">
 <title>Просмотр БД</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='url(%23g)'/%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%234e6daa'/%3E%3Cstop offset='100%25' stop-color='%235a4f9e'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cellipse cx='16' cy='10' rx='8' ry='3' fill='none' stroke='%23fff' stroke-width='1.8'/%3E%3Cpath d='M8 10v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6' fill='none' stroke='%23fff' stroke-width='1.8'/%3E%3Cpath d='M8 16v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6' fill='none' stroke='%23fff' stroke-width='1.8'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/css/db_styles.css?v=20260722b">
-<script>
-// Раннее применение сохранённой темы/акцента (до отрисовки, чтобы
-// экран логина сразу был в нужной теме и без мигания).
-(function(){
-  try {
-    var s = JSON.parse(localStorage.getItem('sed_view_settings') || '{}');
-    var r = document.documentElement;
-    if (s.theme) r.dataset.theme = s.theme;
-    if (s.anim === false) r.dataset.anim = 'off';
-    var AC = {
-      classic:['#3d5fa0','#2f4d8a'], blue:['#3b6fd4','#2f5cb8'], sky:['#0d9bd8','#0a83b8'], violet:['#7c5cdb','#674ac0'],
-      pink:['#db5c93','#c04a7d'], green:['#2ba05c','#22864c'], teal:['#12a594','#0e8a7c'],
-      orange:['#e08a2b','#c47522'], red:['#dc4b57','#c03946']
-    };
-    var a = AC[s.accent || 'classic'];
-    if (a) {
-      r.style.setProperty('--c-accent', a[0]);
-      r.style.setProperty('--c-accent-h', a[1]);
-      r.style.setProperty('--c-blue', a[0]);
-      r.style.setProperty('--c-blue-h', a[1]);
-    }
-  } catch(e){}
-})();
-</script>
+<!-- Раннее применение темы/акцента (до отрисовки). Вынесено в db_boot.js
+     ради строгого CSP; грузится первым, без defer, чтобы не было мигания. -->
+<script src="assets/js/db_boot.js?v=20260804"></script>
 <style>
 
 #columnsDropdownWrap { position:relative }
@@ -132,6 +116,8 @@ label:has(input[type=radio]:checked) {
 /* SQL-редактор: тёмная тема + шрифт данных */
 [data-theme="dark"] #sqlEditorWrap { background: #1f232c !important; border-color: var(--c-border) !important; }
 #sqlEditor, #sqlHighlight { font-family: var(--data-ff, var(--font-mono)) !important; }
+/* Ховер тумблера пароля — CSS вместо инлайновых onmouseover/onmouseout (V-06) */
+#btnTogglePass:hover { color: var(--c-text) !important; }
 </style>
 </head>
 <body>
@@ -232,21 +218,11 @@ label:has(input[type=radio]:checked) {
         <input type="password" id="loginPassword" placeholder="Введите пароль"
           autocomplete="current-password" style="width:100%;padding-right:38px">
         <button type="button" id="btnTogglePass"
-          onclick="(function(){
-            const inp = document.getElementById('loginPassword');
-            const btn = document.getElementById('btnTogglePass');
-            const show = inp.type === 'password';
-            inp.type = show ? 'text' : 'password';
-            btn.innerHTML = show
-              ? '<svg width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\'><path d=\'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94\'/><path d=\'M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19\'/><line x1=\'1\' y1=\'1\' x2=\'23\' y2=\'23\'/></svg>'
-              : '<svg width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\'><path d=\'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z\'/><circle cx=\'12\' cy=\'12\' r=\'3\'/></svg>';
-          })()"
+          data-act="togglePass"
           style="position:absolute;right:0;top:0;height:100%;width:36px;
             background:none;border:none;cursor:pointer;
             display:flex;align-items:center;justify-content:center;
             color:var(--c-text-3);transition:color .15s"
-          onmouseover="this.style.color='var(--c-text)'"
-          onmouseout="this.style.color='var(--c-text-3)'"
           title="Показать/скрыть пароль">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -291,22 +267,7 @@ label:has(input[type=radio]:checked) {
 <script src="assets/js/qrcode.js?v=20260624"></script>
 <script src="assets/js/db_2fa.js?v=20260624"></script>
 <script src="assets/js/db_auth.js?v=20260624"></script>
-<script>
-  const _origShowApp = window.showApp;
-  window.showApp = function(name, isAdmin) {
-    if (window._showAppGuard) return;
-    window._showAppGuard = true;
-    _origShowApp(name, isAdmin);
-  };
-
-  document.addEventListener('DOMContentLoaded', () => {
-    authInit();
-    document.addEventListener('mousedown', e => {
-      const m = document.getElementById('historyModal');
-      if (m?.classList.contains('open') && e.target === m) closeHistoryModal();
-    });
-  });
-</script>
+<script src="assets/js/db_init.js?v=20260804"></script>
 
 <!-- ── Модальное окно ─────────────────── -->
 
