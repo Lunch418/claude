@@ -1,0 +1,36 @@
+# ── systemd-юнит демона запросов СЭД ──────────────────────────────
+# Путь: /etc/systemd/system/sed-daemon.service
+# Демон держит пул постоянных SSH-сессий и Unix-сокет /tmp/sed_query.sock,
+# к которому обращается PHP-FPM. Должен работать под тем же пользователем,
+# что и веб (www-data), иначе PHP не получит доступ к сокету.
+#
+#   systemctl daemon-reload
+#   systemctl enable --now sed-daemon
+#   systemctl status sed-daemon
+#   journalctl -u sed-daemon -f      # + свой лог: tail -f /tmp/sed_daemon.log
+
+[Unit]
+Description=SED query daemon (persistent SSH pool)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/sed
+# .env демон читает сам (scripts/../.env); дублировать не обязательно.
+ExecStart=/usr/bin/python3 /var/www/sed/scripts/pam_daemon.py --foreground
+Restart=always
+RestartSec=5
+# ВАЖНО: сокет и кэш демон держит в /tmp. PrivateTmp дал бы изолированный
+# /tmp — тогда PHP-FPM НЕ увидел бы сокет. Поэтому общий /tmp.
+PrivateTmp=false
+# Умеренная изоляция (совместима с /tmp и исходящим SSH):
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectControlGroups=true
+ProtectKernelTunables=true
+
+[Install]
+WantedBy=multi-user.target
