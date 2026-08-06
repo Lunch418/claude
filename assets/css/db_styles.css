@@ -459,6 +459,8 @@ select { cursor:pointer }
   border-radius:var(--r); border-width:1.5px;
 }
 .login-field .org-combo-drop { min-width:100%; max-width:100% }
+/* Список пользователей на входе — чуть длиннее (не обрезался так строго) */
+.login-field .org-combo-list { max-height:340px }
 
 /* ── SQL BAR ─────────────────────────────────────────────────── */
 .sql-bar {
@@ -2007,13 +2009,6 @@ button[title="Закрыть"]:hover, button[title="Закрыть панель"
     inset 0 1px 0 rgba(255, 255, 255, .6);
   padding: 38px 40px; overflow: hidden;
 }
-/* анимированная акцентная полоска сверху */
-.login-card::before {
-  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px;
-  background: linear-gradient(90deg, var(--c-accent), var(--c-accent-h), var(--c-accent));
-  background-size: 200% 100%; animation: login-bar 6s linear infinite;
-}
-@keyframes login-bar { to { background-position: 200% 0 } }
 
 .login-logo-mark {
   width: 42px; height: 42px; border-radius: 13px;
@@ -2065,5 +2060,5 @@ button[title="Закрыть"]:hover, button[title="Закрыть панель"
 [data-theme="dark"] .login-orb { opacity: .42; }
 /* уважаем системную настройку «меньше движения» */
 @media (prefers-reduced-motion: reduce) {
-  .login-orb, .login-overlay, .login-overlay::after, .login-card::before { animation: none !important; }
+  .login-orb, .login-overlay, .login-overlay::after { animation: none !important; }
 }
