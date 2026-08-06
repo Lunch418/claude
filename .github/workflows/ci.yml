@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, "claude/**" ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pgsql, mbstring
+          coverage: none
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # tests/run.sh: static (php -l, компиляция Python + встроенные скрипты,
+      # node --check, отсутствие инлайн-обработчиков, строгий CSP) + unit
+      # (PHP: валидатор/CSV/TOTP; Python: validate_readonly/_csv_safe/пул).
+      # Браузерный шаг авто-скипается без Chromium (/opt/pw-browsers) —
+      # он гоняется в песочнице разработки, здесь остаётся детерминированная часть.
+      - name: Run test suite
+        run: bash tests/run.sh
