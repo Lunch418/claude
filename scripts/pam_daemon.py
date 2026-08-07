@@ -76,9 +76,11 @@ CHED_DB_USER = os.environ.get('CHED_DB_USER', '')
 CHED_DB_PASS = os.environ.get('CHED_DB_PASS', '')
 
 # ── Профиль CHED2: та же ВМ/вход/DB-юзер, что у CHED, но другая
-#    база (свой host и name). PAM-сессия CHED переиспользуется.
-CHED2_DB_HOST = os.environ.get('CHED2_DB_HOST', '')
-CHED2_DB_PORT = os.environ.get('CHED2_DB_PORT', CHED_DB_PORT)
+#    база. Обычно тот же сервер PostgreSQL, что у CHED, только другое имя БД,
+#    поэтому host/port по умолчанию наследуются от CHED (переопределяются
+#    только если CHED2 реально на другом сервере). CHED2_DB_NAME обязателен.
+CHED2_DB_HOST = os.environ.get('CHED2_DB_HOST', '') or CHED_DB_HOST
+CHED2_DB_PORT = os.environ.get('CHED2_DB_PORT', '') or CHED_DB_PORT
 CHED2_DB_NAME = os.environ.get('CHED2_DB_NAME', '')
 
 # ── Профиль KSP: тот же PAM-хост/порт, но свой вход в портал,
@@ -493,6 +495,11 @@ class Daemon:
         # CHED2 ходит в другую базу на той же CHED-ВМ
         db_override = None
         if profile == 'ched2':
+            # Без CHED2_DB_NAME подключение ушло бы в БД по умолчанию и
+            # показало бы «чужие» (например CHED) схемы — явная ошибка вместо
+            # тихой путаницы.
+            if not CHED2_DB_NAME:
+                return {'ok': False, 'error': 'CHED2 не настроен: задайте CHED2_DB_NAME в .env'}
             db_override = (CHED2_DB_HOST, CHED2_DB_PORT, CHED2_DB_NAME,
                            CHED_DB_USER, CHED_DB_PASS)
         pool = self._pool_for(profile)

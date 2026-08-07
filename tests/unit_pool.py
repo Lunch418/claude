@@ -83,5 +83,11 @@ except RuntimeError:
     raised = True
 ok(raised, 'ched без CHED_TARGET_HOST → RuntimeError')
 
+# ched2 без CHED2_DB_NAME → понятная ошибка (возврат до обращения к SSH)
+D.CHED2_DB_NAME = ''
+res = D.Daemon()._execute_query('SELECT 1', 'preview', 1, 'ched2')
+ok(isinstance(res, dict) and not res.get('ok') and 'CHED2' in res.get('error', ''),
+   'ched2 без CHED2_DB_NAME → понятная ошибка, а не чужие схемы')
+
 print(f'\n== Итог: fail={fail} ==')
 sys.exit(0 if fail == 0 else 1)
