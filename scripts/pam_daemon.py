@@ -384,12 +384,17 @@ class Session:
 
 class SessionPool:
     """Пул SSH-сессий одного профиля: до `size` параллельных запросов.
-    Сессии создаются лениво и подключаются при первом использовании."""
+    Сессии создаются лениво и подключаются при первом использовании.
+
+    LIFO (стек): под низкой нагрузкой раз за разом отдаётся одна и та же
+    уже подключённая («тёплая») сессия — не платим за дорогой PAM/SSH-коннект
+    на каждый запрос. Дополнительные сессии поднимаются только при реальной
+    одновременности (когда верхняя занята другим запросом)."""
     def __init__(self, factory, size):
         self._factory = factory
         self._size = max(1, int(size))
         self._all = []
-        self._free = queue.Queue()
+        self._free = queue.LifoQueue()
         self._build_lock = threading.Lock()
 
     def _ensure_built(self):
@@ -421,6 +426,9 @@ class SessionPool:
                     s.ping()
             except Exception:
                 pass
+        # Возвращаем так, чтобы «тёплые» (alive) оказались наверху стека и
+        # переиспользовались первыми: живые кладём последними.
+        for s in sorted(drained, key=lambda x: 1 if getattr(x, 'alive', False) else 0):
             self._free.put(s)
 
     def close_all(self):

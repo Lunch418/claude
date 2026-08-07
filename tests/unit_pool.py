@@ -59,6 +59,13 @@ ok(pool.any_alive() is True, 'any_alive=True при живых сессиях')
 pool.close_all()
 ok(all(s.closed >= 1 for s in pool._all), 'close_all закрывает все сессии')
 
+print('== SessionPool: LIFO-переиспользование тёплой сессии ==')
+pool2 = D.SessionPool(lambda: DummySession(), size=3)
+x = pool2.acquire(timeout=1); pool2.release(x)
+y = pool2.acquire(timeout=1); pool2.release(y)
+z = pool2.acquire(timeout=1); pool2.release(z)
+ok(x is y and y is z, 'под низкой нагрузкой отдаётся та же сессия (нет лишних коннектов)')
+
 print('== Daemon._pool_for ==')
 # профили ched/ksp требуют конфиг — включаем для теста маппинга
 D.CHED_TARGET_HOST = 'x'
