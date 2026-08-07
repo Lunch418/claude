@@ -11,7 +11,7 @@
 | V-01 | Обход 2FA через `X-Mobile-Client`                   | ✅ исправлено в коде | `AuthController::gate2fa/verify2fa` |
 | V-02 | `.env`/`storage`/`scripts` доступны по HTTP         | ⚙️ конфиг деплоя | `.htaccess`, `deploy/nginx-security.conf` |
 | V-03 | CSV/formula injection в экспорте                    | ✅ исправлено в коде | PHP + оба remote-скрипта |
-| V-04 | Обход блэклиста SQL (`pg_sleep_for`, `pg_cancel_backend`) | ✅ исправлено в коде | `RemoteRunner::assertReadOnly` |
+| V-04 | Обход блэклиста SQL (`pg_sleep_for`, `pg_cancel_backend`) | ✅ исправлено в коде | `RemoteRunner::assertReadOnly` (¹ см. ниже) |
 | V-05 | Слабый фильтр в `LocalQueryController`              | ✅ исправлено в коде | общий валидатор |
 | V-06 | CSP `script-src 'unsafe-inline'`                    | ✅ исправлено в коде | `db_viewer.html` meta + `index.php` + делегирование |
 | V-07 | IDOR в `poll()`/`cancel()`                          | ✅ исправлено в коде | `RemoteController` |
@@ -50,6 +50,16 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO sed_ro;
 При таких ролях V-04/V-05 становятся практически неэксплуатируемыми
 независимо от фильтра. Дополнительно в сессии выставлен
 `statement_timeout=590000` (снимает класс sleep/DoS).
+
+¹ **`pg_cancel_backend` — исключение для привилегированных.** По умолчанию
+запрещён всем, но админам и пользователям из `REMOTE_USERS` (флаг `canRemote`)
+разрешён как инструмент «отменить зависший запрос по PID»
+(`SELECT pg_cancel_backend(<pid>)`). Флаг привилегии выставляет PHP
+(`RemoteController::isPrivileged`) и прокидывает в валидатор и в демон
+(`privileged`) / процесс (`_SED_ALLOW_CANCEL`). Работает потому, что все
+запросы идут под одной read-only ролью БД — PostgreSQL позволяет отменять
+бэкенды своей же роли. `pg_terminate_backend` (жёсткий разрыв) закрыт всегда,
+для всех.
 
 ---
 

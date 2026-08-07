@@ -64,9 +64,12 @@ class RemoteRunner {
      * дополнительный рубеж. Настоящая граница — привилегии роли БД
      * (NOSUPERUSER, read-only, без доступа к pg_authid/pg_read_file).
      *
+     * @param bool $allowCancel разрешить pg_cancel_backend (только для
+     *        привилегированных: админ или REMOTE_USERS/canRemote) — отмена
+     *        зависшего запроса по PID. pg_terminate_backend остаётся закрыт.
      * @throws \InvalidArgumentException если SQL не прошёл валидацию
      */
-    public static function assertReadOnly(string $sql): void
+    public static function assertReadOnly(string $sql, bool $allowCancel = false): void
     {
         // Удаляем блочные /* ... */ и строчные -- ... комментарии
         $clean = preg_replace('/\/\*.*?\*\//s', ' ', $sql);
@@ -90,24 +93,32 @@ class RemoteRunner {
             throw new \InvalidArgumentException('Запрос содержит запрещённые операторы');
         }
 
-        // Блокируем опасные операторы даже внутри подзапросов.
-        // pg_cancel_backend закрыт для пользовательского SQL (отмена чужих
-        // бэкендов); отмена собственных запросов приложения идёт доверенным
-        // каналом RemoteRunner::cancelBackend() мимо этого валидатора.
+        // pg_cancel_backend: по умолчанию закрыт (отмена чужих бэкендов).
+        // Разрешаем только привилегированным ($allowCancel) — им нужен
+        // инструмент «отменить зависший запрос по PID». Все запросы идут под
+        // одной read-only ролью БД, поэтому отменяются только бэкенды этой же
+        // роли. Отмена собственных запросов приложения по-прежнему идёт
+        // доверенным каналом RemoteRunner::cancelBackend().
+        if (!$allowCancel && preg_match('/\bpg_cancel_backend\b/i', $clean)) {
+            throw new \InvalidArgumentException('Запрос содержит запрещённые операторы');
+        }
+
+        // Блокируем опасные операторы даже внутри подзапросов
+        // (pg_terminate_backend закрыт всегда — это жёсткий разрыв соединения).
         $forbidden = ['insert', 'update', 'delete', 'drop', 'alter', 'create',
                       'truncate', 'copy', 'grant', 'revoke', 'execute', 'call',
                       'pg_read_file', 'pg_read_binary_file', 'pg_ls_dir', 'pg_stat_file',
                       'lo_import', 'lo_export', 'dblink',
-                      'pg_terminate_backend', 'pg_cancel_backend'];
+                      'pg_terminate_backend'];
         $pattern   = '/\b(' . implode('|', $forbidden) . ')\b/i';
         if (preg_match($pattern, $clean)) {
             throw new \InvalidArgumentException('Запрос содержит запрещённые операторы');
         }
     }
 
-    private function validateSql(string $sql): void
+    private function validateSql(string $sql, bool $allowCancel = false): void
     {
-        self::assertReadOnly($sql);
+        self::assertReadOnly($sql, $allowCancel);
     }
 
     /**
@@ -128,15 +139,15 @@ class RemoteRunner {
     /**
      * @return array{ok: bool, columns?: array, rows?: array, count?: int, error?: string}
      */
-    public function runQuery(string $sql, string $mode = 'preview', int $limit = 100, string $profile = 'sed', string $schema = ''): array {
+    public function runQuery(string $sql, string $mode = 'preview', int $limit = 100, string $profile = 'sed', string $schema = '', bool $allowCancel = false): array {
         try {
-            $this->validateSql($sql);
+            $this->validateSql($sql, $allowCancel);
         } catch (\InvalidArgumentException $e) {
             return ['ok' => false, 'error' => $e->getMessage()];
         }
 
         if ($this->useDaemon) {
-            $daemonResult = $this->runViaDaemon($sql, $mode, $limit, $profile, $schema);
+            $daemonResult = $this->runViaDaemon($sql, $mode, $limit, $profile, $schema, $allowCancel);
             if ($daemonResult !== null) {
                 return $daemonResult;
             }
@@ -150,10 +161,10 @@ class RemoteRunner {
             return ['ok' => false, 'error' => 'Источник недоступен: демон не запущен'];
         }
 
-        return $this->runViaProcess($sql, $mode, $limit);
+        return $this->runViaProcess($sql, $mode, $limit, $allowCancel);
     }
 
-    private function runViaDaemon(string $sql, string $mode, int $limit, string $profile = 'sed', string $schema = ''): ?array {
+    private function runViaDaemon(string $sql, string $mode, int $limit, string $profile = 'sed', string $schema = '', bool $allowCancel = false): ?array {
         $errno  = 0;
         $errstr = '';
         $fp = @stream_socket_client(
@@ -171,11 +182,12 @@ class RemoteRunner {
         stream_set_timeout($fp, min($this->phpTimeout, 620));
 
         $payload = json_encode([
-            'sql'     => $sql,
-            'mode'    => $mode,
-            'limit'   => $limit,
-            'profile' => $profile,
-            'schema'  => $schema,
+            'sql'        => $sql,
+            'mode'       => $mode,
+            'limit'      => $limit,
+            'profile'    => $profile,
+            'schema'     => $schema,
+            'privileged' => $allowCancel,   // разрешить pg_cancel_backend
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         if ($payload === false) {
@@ -262,13 +274,14 @@ class RemoteRunner {
         return is_array($d) && !empty($d['ok']);
     }
 
-    private function runViaProcess(string $sql, string $mode, int $limit): array {
+    private function runViaProcess(string $sql, string $mode, int $limit, bool $allowCancel = false): array {
         $prevTimeLimit = (int) ini_get('max_execution_time');
         set_time_limit($this->phpTimeout + 30);
         ignore_user_abort(true);
 
         $env = $this->env;
-        $env['_SED_INLINE_SQL'] = $sql;
+        $env['_SED_INLINE_SQL']  = $sql;
+        $env['_SED_ALLOW_CANCEL'] = $allowCancel ? '1' : '0';
 
         $cmd = [
             $this->pythonBin,

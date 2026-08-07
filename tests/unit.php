@@ -27,8 +27,18 @@ echo "== assertReadOnly: заблокировано ==\n";
 ok(blocks('SELECT pg_sleep(5)'),                'pg_sleep');
 ok(blocks("SELECT pg_sleep_for('1 hour')"),     'pg_sleep_for (V-04)');
 ok(blocks('SELECT pg_sleep_until(now())'),       'pg_sleep_until (V-04)');
-ok(blocks('SELECT pg_cancel_backend(123)'),      'pg_cancel_backend (V-04)');
+ok(blocks('SELECT pg_cancel_backend(123)'),      'pg_cancel_backend блок по умолчанию');
 ok(blocks('SELECT pg_terminate_backend(123)'),   'pg_terminate_backend');
+
+echo "== pg_cancel_backend для привилегированных ==\n";
+function allowsPriv(string $sql): bool {
+    try { RemoteRunner::assertReadOnly($sql, true); return true; }
+    catch (\InvalidArgumentException $e) { return false; }
+}
+ok(allowsPriv('SELECT pg_cancel_backend(123)'),  'pg_cancel_backend разрешён привилегированному');
+ok(!allowsPriv('SELECT pg_terminate_backend(1)'),'pg_terminate_backend закрыт даже привилегированному');
+ok(!allowsPriv('DELETE FROM t'),                 'DELETE закрыт даже привилегированному');
+ok(!allowsPriv("SELECT pg_read_file('/x')"),     'pg_read_file закрыт даже привилегированному');
 ok(blocks('DELETE FROM t'),                      'DELETE');
 ok(blocks('UPDATE t SET x = 1'),                 'UPDATE');
 ok(blocks('SELECT 1; DROP TABLE t'),             'multi-statement (;)');

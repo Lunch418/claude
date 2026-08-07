@@ -28,8 +28,17 @@ class RemoteController {
             return;
         }
 
-        $result = $this->runner->runQuery($sql, 'preview', $limit, $p['profile'], $p['schema']);
+        $result = $this->runner->runQuery($sql, 'preview', $limit, $p['profile'], $p['schema'], $this->isPrivileged());
         echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Привилегированный пользователь: админ или из REMOTE_USERS (canRemote).
+     * Им разрешён pg_cancel_backend (отмена зависшего запроса по PID).
+     */
+    private function isPrivileged(): bool {
+        global $sessionUser;
+        return !empty($sessionUser['isAdmin']) || !empty($sessionUser['canRemote']);
     }
 
     /** Извлекает и проверяет профиль источника и схему. CHED/KSP — только админам. */
@@ -71,7 +80,7 @@ class RemoteController {
             echo json_encode(['ok'=>false,'error'=>'Нет доступа к этому источнику']);
             return;
         }
-        $result  = $this->runner->runQuery($sql, 'export', $maxRows, $p['profile'], $p['schema']);
+        $result  = $this->runner->runQuery($sql, 'export', $maxRows, $p['profile'], $p['schema'], $this->isPrivileged());
 
         if (!($result['ok'] ?? false)) {
             echo json_encode($result, JSON_UNESCAPED_UNICODE);
@@ -152,9 +161,9 @@ class RemoteController {
     private const MAX_JOBS_PER_USER = 3;
 
     // ── Валидация SQL — единый источник правды (RemoteRunner) ──
-    private function validateSqlOrFail(string $sql): ?string {
+    private function validateSqlOrFail(string $sql, bool $allowCancel = false): ?string {
         try {
-            RemoteRunner::assertReadOnly($sql);
+            RemoteRunner::assertReadOnly($sql, $allowCancel);
             return null;
         } catch (\InvalidArgumentException $e) {
             return $e->getMessage();
@@ -242,7 +251,8 @@ class RemoteController {
         if ($sql === '') {
             echo json_encode(['ok'=>false,'error'=>'sql is required']); return;
         }
-        $err = $this->validateSqlOrFail($sql);
+        $priv = $this->isPrivileged();
+        $err = $this->validateSqlOrFail($sql, $priv);
         if ($err !== null) {
             echo json_encode(['ok'=>false,'error'=>$err]); return;
         }
@@ -302,6 +312,7 @@ class RemoteController {
             'DB_USER='         . Config::get('DB_USER'),
             'SED_DB_PASS='     . Config::get('SED_DB_PASS'),
             'PAM_TIMEOUT=1800',
+            '_SED_ALLOW_CANCEL=' . ($priv ? '1' : '0'),
         ];
         file_put_contents($envFile, implode("\n", $envLines) . "\n", LOCK_EX);
         chmod($envFile, 0600);

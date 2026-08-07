@@ -71,16 +71,20 @@ _DANGEROUS = re.compile(
     r'grant|revoke|call|do|execute|vacuum|analyze|'
     r'pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|'
     r'lo_import|lo_export|dblink|pg_terminate_backend|'
-    r'pg_cancel_backend|pg_sleep(?:_for|_until)?)\b', re.I
+    r'pg_sleep(?:_for|_until)?)\b', re.I
 )
+_CANCEL_RE = re.compile(r'\bpg_cancel_backend\b', re.I)
 
-def validate_readonly(sql):
+def validate_readonly(sql, allow_cancel=False):
     q = re.sub(r'/\*.*?\*/', ' ', sql, flags=re.S)
     q = re.sub(r'--[^\n]*', ' ', q).strip()
     if ';' in q:
         raise ValueError("Only single statement (no ';').")
     if not re.match(r'^(with\b[\s\S]+?\bselect\b|select\b)', q, flags=re.I):
         raise ValueError('Only SELECT allowed.')
+    # pg_cancel_backend разрешён только привилегированным (allow_cancel)
+    if not allow_cancel and _CANCEL_RE.search(q):
+        raise ValueError('Forbidden keyword detected.')
     if _DANGEROUS.search(q):
         raise ValueError('Forbidden keyword detected.')
 
@@ -470,7 +474,9 @@ if __name__ == '__main__':
         sys.exit(1)
 
     try:
-        validate_readonly(sql)
+        # _SED_ALLOW_CANCEL=1 выставляет PHP только для привилегированных
+        allow_cancel = os.environ.get('_SED_ALLOW_CANCEL', '0') == '1'
+        validate_readonly(sql, allow_cancel=allow_cancel)
     except ValueError as e:
         _write_result({'ok': False, 'error': str(e)})
         sys.exit(1)

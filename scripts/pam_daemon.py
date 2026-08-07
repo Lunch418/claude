@@ -116,16 +116,20 @@ _DANGEROUS = re.compile(
     r'grant|revoke|call|do|execute|vacuum|analyze|'
     r'pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|'
     r'lo_import|lo_export|dblink|pg_terminate_backend|'
-    r'pg_cancel_backend|pg_sleep(?:_for|_until)?)\b', re.I
+    r'pg_sleep(?:_for|_until)?)\b', re.I
 )
+_CANCEL_RE = re.compile(r'\bpg_cancel_backend\b', re.I)
 
-def validate_readonly(sql: str) -> None:
+def validate_readonly(sql: str, allow_cancel: bool = False) -> None:
     q = re.sub(r'/\*.*?\*/', ' ', sql, flags=re.S)
     q = re.sub(r'--[^\n]*', ' ', q).strip()
     if ';' in q:
         raise ValueError("Only single statement (no ';').")
     if not re.match(r'^(with\b[\s\S]+?\bselect\b|select\b)', q, flags=re.I):
         raise ValueError('Only SELECT allowed.')
+    # pg_cancel_backend разрешён только привилегированным (allow_cancel)
+    if not allow_cancel and _CANCEL_RE.search(q):
+        raise ValueError('Forbidden keyword detected.')
     if _DANGEROUS.search(q):
         raise ValueError('Forbidden keyword detected.')
 
@@ -568,7 +572,7 @@ class Daemon:
                 return
 
             try:
-                validate_readonly(sql)
+                validate_readonly(sql, allow_cancel=bool(req.get('privileged', False)))
             except ValueError as ve:
                 conn.sendall(json.dumps({'ok': False, 'error': str(ve)}).encode() + b'\n')
                 log.warning('REJECTED sql=%.70s reason=%s', sql, ve)
