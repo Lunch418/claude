@@ -1223,7 +1223,7 @@ async function runLocalSql() {
     if (!data.ok) {
       statusEl.textContent = '';
       resultEl.innerHTML = `<div class="placeholder" style="height:80px;color:var(--c-red);font-size:12px">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         ${escHtml(data.error || 'Ошибка')}
       </div>`;
       return;

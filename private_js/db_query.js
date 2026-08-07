@@ -877,7 +877,7 @@ function setStatus(type, msg) {
 
 function setError(msg) {
   document.getElementById('tableArea').innerHTML = `<div class="placeholder" style="height:100%">
-    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5" opacity=".7"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity=".85"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     <div style="color:var(--c-red);font-size:13px;font-weight:600">Ошибка запроса</div>
     <div style="color:var(--c-text-3);font-size:12px;max-width:500px;text-align:center;line-height:1.6">${escHtml(msg)}</div>
   </div>`;

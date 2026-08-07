@@ -135,7 +135,7 @@ function renderTableList(filter = '') {
 
   if (!tables.length) {
     const msg = state.tables.length === 0 && !q
-      ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5" opacity=".6"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><div style="color:var(--c-red);font-size:12px;font-weight:500;margin-top:4px">Не удалось загрузить таблицы</div><div style="font-size:11px;color:var(--c-text-3);margin-top:2px">Проверьте подключение к БД</div>'
+      ? '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity=".8"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div style="color:var(--c-red);font-size:12px;font-weight:500;margin-top:4px">Не удалось загрузить таблицы</div><div style="font-size:11px;color:var(--c-text-3);margin-top:2px">Проверьте подключение к БД</div>'
       : '<div style="font-size:12px;color:var(--c-text-3)">Не найдено</div>';
     list.innerHTML = `<div class="placeholder" style="height:100px">${msg}</div>`;
     return;
