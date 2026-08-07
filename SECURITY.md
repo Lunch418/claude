@@ -51,15 +51,17 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO sed_ro;
 независимо от фильтра. Дополнительно в сессии выставлен
 `statement_timeout=590000` (снимает класс sleep/DoS).
 
-¹ **`pg_cancel_backend` — исключение для привилегированных.** По умолчанию
-запрещён всем, но админам и пользователям из `REMOTE_USERS` (флаг `canRemote`)
-разрешён как инструмент «отменить зависший запрос по PID»
-(`SELECT pg_cancel_backend(<pid>)`). Флаг привилегии выставляет PHP
-(`RemoteController::isPrivileged`) и прокидывает в валидатор и в демон
-(`privileged`) / процесс (`_SED_ALLOW_CANCEL`). Работает потому, что все
-запросы идут под одной read-only ролью БД — PostgreSQL позволяет отменять
-бэкенды своей же роли. `pg_terminate_backend` (жёсткий разрыв) закрыт всегда,
-для всех.
+¹ **Сигналы бэкендам — исключение для привилегированных.** `pg_cancel_backend`
+(отмена запроса) и `pg_terminate_backend` (разрыв соединения) по умолчанию
+запрещены всем, но админам и пользователям из `REMOTE_USERS` (флаг `canRemote`)
+разрешены как инструмент «убить зависший запрос/соединение по PID»
+(`SELECT pg_cancel_backend(<pid>)` / `SELECT pg_terminate_backend(<pid>)`).
+Флаг привилегии выставляет PHP (`RemoteController::isPrivileged`) и прокидывает
+в валидатор (`assertReadOnly($sql, $allowSignal)`), в демон (`privileged`) и в
+процесс (`_SED_ALLOW_SIGNAL`). Работает потому, что все запросы идут под одной
+read-only ролью БД — PostgreSQL позволяет управлять бэкендами своей же роли.
+Остальной блэклист (DML, `pg_read_file`, `dblink`, `pg_sleep*`, …) закрыт для
+всех без исключений.
 
 ---
 

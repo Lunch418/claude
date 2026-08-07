@@ -33,12 +33,13 @@ for name, mod in [('pam_runner', pam_runner), ('pam_daemon', pam_daemon)]:
     ok(blocks(mod, 'SELECT pg_cancel_backend(1)'),        f'{name}: pg_cancel_backend блок по умолчанию')
     ok(blocks(mod, 'DELETE FROM t'),                      f'{name}: DELETE блок')
     ok(blocks(mod, 'SELECT 1; DROP TABLE t'),             f'{name}: multi-statement блок')
-    # привилегированный (allow_cancel=True): cancel разрешён, остальное — нет
+    # привилегированный (allow_signal=True): cancel/terminate разрешены, остальное — нет
     def permits(sql):
-        try: mod.validate_readonly(sql, allow_cancel=True); return True
+        try: mod.validate_readonly(sql, allow_signal=True); return True
         except ValueError: return False
+    ok(blocks(mod, 'SELECT pg_terminate_backend(1)'),     f'{name}: pg_terminate_backend блок по умолчанию')
     ok(permits('SELECT pg_cancel_backend(1)'),            f'{name}: pg_cancel_backend разрешён привилегированному')
-    ok(not permits('SELECT pg_terminate_backend(1)'),     f'{name}: pg_terminate_backend закрыт даже привилегированному')
+    ok(permits('SELECT pg_terminate_backend(1)'),         f'{name}: pg_terminate_backend разрешён привилегированному')
     ok(not permits('DELETE FROM t'),                      f'{name}: DELETE закрыт даже привилегированному')
 
 def extract_csv_safe(source, label):

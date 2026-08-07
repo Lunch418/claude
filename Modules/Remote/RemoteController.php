@@ -34,7 +34,8 @@ class RemoteController {
 
     /**
      * Привилегированный пользователь: админ или из REMOTE_USERS (canRemote).
-     * Им разрешён pg_cancel_backend (отмена зависшего запроса по PID).
+     * Им разрешены сигналы бэкендам: pg_cancel_backend (отмена запроса) и
+     * pg_terminate_backend (разрыв соединения) — по PID.
      */
     private function isPrivileged(): bool {
         global $sessionUser;
@@ -161,9 +162,9 @@ class RemoteController {
     private const MAX_JOBS_PER_USER = 3;
 
     // ── Валидация SQL — единый источник правды (RemoteRunner) ──
-    private function validateSqlOrFail(string $sql, bool $allowCancel = false): ?string {
+    private function validateSqlOrFail(string $sql, bool $allowSignal = false): ?string {
         try {
-            RemoteRunner::assertReadOnly($sql, $allowCancel);
+            RemoteRunner::assertReadOnly($sql, $allowSignal);
             return null;
         } catch (\InvalidArgumentException $e) {
             return $e->getMessage();
@@ -312,7 +313,7 @@ class RemoteController {
             'DB_USER='         . Config::get('DB_USER'),
             'SED_DB_PASS='     . Config::get('SED_DB_PASS'),
             'PAM_TIMEOUT=1800',
-            '_SED_ALLOW_CANCEL=' . ($priv ? '1' : '0'),
+            '_SED_ALLOW_SIGNAL=' . ($priv ? '1' : '0'),
         ];
         file_put_contents($envFile, implode("\n", $envLines) . "\n", LOCK_EX);
         chmod($envFile, 0600);
