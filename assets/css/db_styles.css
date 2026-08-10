@@ -2007,7 +2007,10 @@ button[title="Закрыть"]:hover, button[title="Закрыть панель"
     0 26px 64px -14px color-mix(in srgb, var(--c-accent) 32%, rgba(15, 23, 42, .3)),
     0 2px 8px rgba(15, 23, 42, .06),
     inset 0 1px 0 rgba(255, 255, 255, .6);
-  padding: 38px 40px; overflow: hidden;
+  padding: 38px 40px;
+  /* overflow оставляем видимым: иначе карточка обрезает выпадающий список
+     пользователей (он абсолютно позиционирован и вылезает за низ карточки). */
+  overflow: visible;
 }
 
 .login-logo-mark {
