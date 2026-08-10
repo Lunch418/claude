@@ -459,8 +459,8 @@ select { cursor:pointer }
   border-radius:var(--r); border-width:1.5px;
 }
 .login-field .org-combo-drop { min-width:100%; max-width:100% }
-/* Список пользователей на входе — чуть длиннее (не обрезался так строго) */
-.login-field .org-combo-list { max-height:340px }
+/* Список пользователей на входе — комфортная высота (~7 пунктов), дальше скролл */
+.login-field .org-combo-list { max-height:264px }
 
 /* ── SQL BAR ─────────────────────────────────────────────────── */
 .sql-bar {
