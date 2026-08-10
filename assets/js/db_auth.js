@@ -414,7 +414,7 @@ function canUseRemote() {
 
 function _loadAppScripts() {
   const mods = [
-    'db_app','db_table','db_filter','db_query','db_template',
+    'db_mascot','db_app','db_table','db_filter','db_query','db_template',
     'db_fk','db_export','db_columns','db_saved','db_prefs','db_sqledit','db_split','db_admin','db_settings',
   ];
   const base = (window.APP_CONFIG && window.APP_CONFIG.apiUrl) || '/index.php';

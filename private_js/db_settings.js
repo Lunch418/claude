@@ -620,6 +620,7 @@
 
   function openSettings() {
     injectCss();
+    window.sedMascotState?.('settings', { autoIdleMs: 1800 });
     document.getElementById('setOverlay')?.remove();
 
     const overlay = document.createElement('div');

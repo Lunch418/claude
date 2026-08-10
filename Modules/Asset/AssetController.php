@@ -13,6 +13,7 @@ class AssetController
     private const ALLOWED = [
         'db_app', 'db_table', 'db_filter', 'db_query', 'db_template',
         'db_fk', 'db_export', 'db_columns', 'db_saved', 'db_prefs', 'db_sqledit', 'db_split', 'db_admin', 'db_settings',
+        'db_mascot',
     ];
 
     private function dir(): string

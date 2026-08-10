@@ -195,6 +195,7 @@ async function goBack() {
 
 function navigateToFK(table, id, evt) {
   if (evt) evt.stopPropagation();
+  window.sedMascotState?.('relations', { autoIdleMs: 1500 });
   pushNav();
   const wasTemplate = state.selectedTmpl >= 0;
   if (wasTemplate) {
@@ -215,7 +216,7 @@ function navigateToFK(table, id, evt) {
   const sql = `SELECT * FROM "${table}" WHERE id = ${parseInt(id)}`;
   document.getElementById('sqlEditor').value = sql;
   toggleSqlBar(false); autoResizeSQL();
-  execQuery(sql);
+  execQuery(sql, { skipMascot: true });
 }
 
 // ── FK Модальное окно ─────────────────────────────────────────

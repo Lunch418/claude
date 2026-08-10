@@ -98,6 +98,7 @@ async function execQuery(sql, opts = {}) {
   _currentSql = sql;
   const myVersion = ++_execVersion;
   const forceLimitZero = !!opts.forceLimitZero;
+  const skipMascot     = !!opts.skipMascot;
 
   state.allRows      = [];
   state.filteredRows = [];
@@ -108,6 +109,7 @@ async function execQuery(sql, opts = {}) {
   state.lastSql      = sql;
 
   setLoading(true);
+  if (!skipMascot) window.sedMascotState?.('query');
   const t0 = Date.now();
 
   try {
@@ -207,7 +209,10 @@ async function execQuery(sql, opts = {}) {
   } finally {
     // Если пока мы ждали (poll/fetch), пользователь уже запустил новый
     // запрос — не трогаем его UI своим (уже неактуальным) завершением.
-    if (myVersion === _execVersion) setLoading(false);
+    if (myVersion === _execVersion) {
+      setLoading(false);
+      if (!skipMascot) window.sedMascotState?.('idle');
+    }
   }
 }
 
