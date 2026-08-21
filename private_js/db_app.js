@@ -1379,22 +1379,30 @@ function switchDb(db) {
 async function loadChedSchemas() {
   const sel = document.getElementById('chedSchemaSelect');
   try {
+    // has_tables — считаем сразу тут же (одним запросом), чтобы по
+    // умолчанию выбирать НЕ первую по алфавиту схему (часто это пустой
+    // 'public'), а первую, где реально что-то есть.
     const sql =
-      "SELECT schema_name FROM information_schema.schemata " +
-      "WHERE schema_name NOT IN ('pg_catalog','information_schema') " +
-      "AND schema_name NOT LIKE 'pg_temp%' AND schema_name NOT LIKE 'pg_toast%' " +
-      "ORDER BY schema_name";
+      "SELECT n.nspname AS schema_name, EXISTS (" +
+      "  SELECT 1 FROM pg_class c WHERE c.relnamespace = n.oid AND c.relkind IN ('r','v','m','p','f')" +
+      ") AS has_tables " +
+      "FROM pg_namespace n " +
+      "WHERE n.nspname NOT IN ('pg_catalog','information_schema') " +
+      "AND n.nspname NOT LIKE 'pg_temp%' AND n.nspname NOT LIKE 'pg_toast%' " +
+      "ORDER BY n.nspname";
     const res = await apiCall(sql, 'preview', 1000);
     if (!res || !res.ok) {
       state.tablesLoadOk = false;
       setError((res && res.error) || `Не удалось загрузить схемы (${_remoteLabel(state.currentDb)})`);
       return;
     }
-    const schemas = (res.rows || []).map(r => r.schema_name).filter(Boolean);
+    const schemaRows = (res.rows || []).filter(r => r.schema_name);
+    const schemas = schemaRows.map(r => r.schema_name);
     if (sel) sel.innerHTML = schemas.map(s =>
       `<option value="${s.replace(/"/g, '&quot;')}">${s}</option>`).join('');
     if (!schemas.length) { setStatus('ok', `${_remoteLabel(state.currentDb)}: схемы не найдены`); return; }
-    const want = (state.chedSchema && schemas.includes(state.chedSchema)) ? state.chedSchema : schemas[0];
+    const nonEmpty = schemaRows.find(r => r.has_tables === true || r.has_tables === 't')?.schema_name;
+    const want = (state.chedSchema && schemas.includes(state.chedSchema)) ? state.chedSchema : (nonEmpty || schemas[0]);
     state.chedSchema = want;
     if (sel) sel.value = want;
     if (typeof window.__resetSqlSchema === 'function') window.__resetSqlSchema();
@@ -1424,7 +1432,7 @@ async function loadChedTables() {
       "SELECT c.relname AS table_name, COALESCE(d.description,'') AS table_comment " +
       "FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace " +
       "LEFT JOIN pg_description d ON d.objoid=c.oid AND d.objsubid=0 " +
-      `WHERE n.nspname='${esc}' AND c.relkind IN ('r','v','m','p') ` +
+      `WHERE n.nspname='${esc}' AND c.relkind IN ('r','v','m','p','f') ` +
       "ORDER BY c.relname";
     const res = await apiCall(sql, 'preview', 5000);
     if (res && res.ok) {

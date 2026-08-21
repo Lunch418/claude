@@ -23,7 +23,7 @@ async function loadTableList() {
       sql = `SELECT c.relname AS table_name, COALESCE(d.description,'') AS table_comment
         FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
         LEFT JOIN pg_description d ON d.objoid=c.oid AND d.objsubid=0
-        WHERE n.nspname='${schema}' AND c.relkind='r'
+        WHERE n.nspname='${schema}' AND c.relkind IN ('r','v','m','p','f')
         ORDER BY c.relname`;
     } else {
       const inList = TABLE_WHITELIST.map(t => `'${t.replace(/'/g,"''")}'`).join(',');
