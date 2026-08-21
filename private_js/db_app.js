@@ -1161,7 +1161,7 @@ async function apiCall(sql, mode = 'preview', limit = 1000) {
     _pendingCalls.set(key, lp); return lp;
   }
 
-  const _profile = (state.currentDb === 'ched' || state.currentDb === 'ched2' || state.currentDb === 'ksp') ? state.currentDb : 'sed';
+  const _profile = (state.currentDb === 'ched' || state.currentDb === 'ched2' || state.currentDb === 'ksp' || state.currentDb === 'monitoring') ? state.currentDb : 'sed';
   const _schema  = _profile !== 'sed' ? (state.chedSchema || '') : '';
 
   const promise = fetch(`${API}?m=Remote&a=preview`, {
@@ -1285,10 +1285,11 @@ function switchDb(db) {
   document.getElementById('dbItemChed')?.classList.toggle('active', db === 'ched');
   document.getElementById('dbItemChed2')?.classList.toggle('active', db === 'ched2');
   document.getElementById('dbItemKsp')?.classList.toggle('active', db === 'ksp');
+  document.getElementById('dbItemMonitoring')?.classList.toggle('active', db === 'monitoring');
   document.getElementById('logoDbLabel').textContent =
-    db === 'local' ? '/ log' : db === 'ched' ? '/ ched' : db === 'ched2' ? '/ ched2' : db === 'ksp' ? '/ ksp' : '/ doc';
+    db === 'local' ? '/ log' : db === 'ched' ? '/ ched' : db === 'ched2' ? '/ ched2' : db === 'ksp' ? '/ ksp' : db === 'monitoring' ? '/ мониторинг' : '/ doc';
   const _chedSel = document.getElementById('chedSchemaSelect');
-  if (_chedSel) _chedSel.style.display = (db === 'ched' || db === 'ched2' || db === 'ksp') ? '' : 'none';
+  if (_chedSel) _chedSel.style.display = (db === 'ched' || db === 'ched2' || db === 'ksp' || db === 'monitoring') ? '' : 'none';
   if (typeof window.__resetSqlSchema === 'function') window.__resetSqlSchema();
   document.getElementById('dbSwitchDropdown').style.display = 'none';
 
@@ -1328,8 +1329,8 @@ function switchDb(db) {
       renderTableList('');
     }
     setStatus('ok', 'Локальная БД: sed_log');
-  } else if (db === 'ched' || db === 'ched2' || db === 'ksp') {
-    // CHED/CHED2/KSP — внешняя база, таблицы зависят от выбранной схемы
+  } else if (db === 'ched' || db === 'ched2' || db === 'ksp' || db === 'monitoring') {
+    // CHED/CHED2/KSP/monitoring — внешняя база, таблицы зависят от выбранной схемы
     state.chedSchema = '';                 // у новой базы свой список схем
     if (tabTemplates) tabTemplates.style.display = 'none';
     if (tabSaved)     tabSaved.style.display     = '';

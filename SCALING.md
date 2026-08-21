@@ -17,7 +17,7 @@
 ## Почему главный тормоз — демон, а не веб-сервер
 
 `scripts/pam_daemon.py`: демон многопоточный (поток на соединение), НО у
-каждого профиля (СЭД / CHED / KSP) **одна** SSH-сессия `Session`, а
+каждого профиля (СЭД / CHED / KSP / MONITORING) **одна** SSH-сессия `Session`, а
 `Session.run()` оборачивает выполнение в `self._lock`:
 
 ```python
@@ -39,16 +39,17 @@ def run(self, sql, mode, limit, ...):
 идут **параллельно**. Размеры — из `.env`:
 
 ```
-SED_POOL_SIZE=4      # пул основной СЭД
-CHED_POOL_SIZE=2     # общий для CHED и CHED2 (та же ВМ, разные БД)
-KSP_POOL_SIZE=2      # отдельная ВМ КСП
+SED_POOL_SIZE=4          # пул основной СЭД
+CHED_POOL_SIZE=2         # общий для CHED и CHED2 (та же ВМ, разные БД)
+KSP_POOL_SIZE=2          # отдельная ВМ КСП
+MONITORING_POOL_SIZE=2   # отдельная ВМ АИС Мониторинг
 ```
 
 Keepalive пингует только свободные сессии (не мешая занятым); мёртвые
 переподключаются при следующем `acquire`. Покрыто юнит-тестами
 (`tests/unit_pool.py`, мок-сессии — без SSH). На бою проверить лимиты
 sshd (`MaxSessions`/`MaxStartups`) на бастионе/ВМ и коннекты PostgreSQL:
-суммарно ≈ (SED+CHED+KSP)×размер пула.
+суммарно ≈ (SED+CHED+KSP+MONITORING)×размер пула.
 
 ### (историческая справка — как было)
 

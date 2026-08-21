@@ -14,7 +14,7 @@ function plural(n, one, few, many) {
 // ── Список таблиц ─────────────────────────────────────────────
 async function loadTableList() {
   try {
-    const isChed = (state.currentDb === 'ched' || state.currentDb === 'ched2' || state.currentDb === 'ksp');
+    const isChed = (state.currentDb === 'ched' || state.currentDb === 'ched2' || state.currentDb === 'ksp' || state.currentDb === 'monitoring');
     let sql;
     if (isChed) {
       // На CHED/CHED2 схема выбирается отдельно (переключатель схем) —

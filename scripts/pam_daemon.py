@@ -97,6 +97,20 @@ KSP_DB_NAME = os.environ.get('KSP_DB_NAME', '')
 KSP_DB_USER = os.environ.get('KSP_DB_USER', '')
 KSP_DB_PASS = os.environ.get('KSP_DB_PASS', '')
 
+# ── Профиль MONITORING (АИС Мониторинг): тот же PAM-хост/порт, но свой
+#    вход в портал, своя ВМ и свои креды БД. Полностью независимая сессия
+#    (как KSP — ничего не наследует и ни с кем не делит пул).
+MONITORING_PAM_USER    = os.environ.get('MONITORING_PAM_USER',        '')
+MONITORING_PAM_PASS    = os.environ.get('MONITORING_PAM_PASSWORD',    '')
+MONITORING_TARGET_HOST = os.environ.get('MONITORING_TARGET_HOST',     '')
+MONITORING_TARGET_USER = os.environ.get('MONITORING_TARGET_USER',     '')
+MONITORING_TARGET_PASS = os.environ.get('MONITORING_TARGET_PASSWORD', '')
+MONITORING_DB_HOST = os.environ.get('MONITORING_DB_HOST', '')
+MONITORING_DB_PORT = os.environ.get('MONITORING_DB_PORT', '5432')
+MONITORING_DB_NAME = os.environ.get('MONITORING_DB_NAME', '')
+MONITORING_DB_USER = os.environ.get('MONITORING_DB_USER', '')
+MONITORING_DB_PASS = os.environ.get('MONITORING_DB_PASS', '')
+
 # ── Размер пула SSH-сессий на профиль ──────────────────────────────
 # Параллелизм запросов: до N разных запросов профиля идут одновременно
 # (снимает сериализацию через одну сессию). Подбирать под лимиты sshd
@@ -106,9 +120,10 @@ def _pool_size(name, default):
         return max(1, int(os.environ.get(name, '') or default))
     except (TypeError, ValueError):
         return default
-SED_POOL_SIZE  = _pool_size('SED_POOL_SIZE',  4)
-CHED_POOL_SIZE = _pool_size('CHED_POOL_SIZE', 2)
-KSP_POOL_SIZE  = _pool_size('KSP_POOL_SIZE',  2)
+SED_POOL_SIZE         = _pool_size('SED_POOL_SIZE',         4)
+CHED_POOL_SIZE        = _pool_size('CHED_POOL_SIZE',        2)
+KSP_POOL_SIZE         = _pool_size('KSP_POOL_SIZE',         2)
+MONITORING_POOL_SIZE  = _pool_size('MONITORING_POOL_SIZE',  2)
 
 # Имя схемы: только латиница/цифры/подчёркивание (для search_path)
 _SCHEMA_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
@@ -444,7 +459,7 @@ class SessionPool:
 
 class Daemon:
     def __init__(self):
-        # Пулы SSH-сессий по профилям: 'sed', 'ched' (общий для ched/ched2), 'ksp'
+        # Пулы SSH-сессий по профилям: 'sed', 'ched' (общий для ched/ched2), 'ksp', 'monitoring'
         self._pools      = {}
         self._pools_lock = threading.Lock()
         self.cache = Cache()
@@ -476,6 +491,12 @@ class Daemon:
                 factory = lambda: Session(KSP_PAM_USER, KSP_PAM_PASS, KSP_TARGET_HOST, KSP_TARGET_USER, KSP_TARGET_PASS,
                                           KSP_DB_HOST, KSP_DB_PORT, KSP_DB_NAME, KSP_DB_USER, KSP_DB_PASS)
                 size = KSP_POOL_SIZE
+            elif key == 'monitoring':
+                if not MONITORING_TARGET_HOST:
+                    raise RuntimeError('MONITORING не настроен: нет MONITORING_TARGET_HOST в .env')
+                factory = lambda: Session(MONITORING_PAM_USER, MONITORING_PAM_PASS, MONITORING_TARGET_HOST, MONITORING_TARGET_USER, MONITORING_TARGET_PASS,
+                                          MONITORING_DB_HOST, MONITORING_DB_PORT, MONITORING_DB_NAME, MONITORING_DB_USER, MONITORING_DB_PASS)
+                size = MONITORING_POOL_SIZE
             else:
                 raise RuntimeError(f'Неизвестный профиль: {profile}')
             pool = SessionPool(factory, size)
@@ -547,7 +568,7 @@ class Daemon:
             mode  = req.get('mode', 'preview')
             limit = int(req.get('limit', 100))
             profile = req.get('profile', 'sed')
-            if profile not in ('sed', 'ched', 'ched2', 'ksp'):
+            if profile not in ('sed', 'ched', 'ched2', 'ksp', 'monitoring'):
                 profile = 'sed'
             schema = (req.get('schema') or '').strip()
             if schema and not _SCHEMA_RE.match(schema):

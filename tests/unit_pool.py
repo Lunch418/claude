@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ── Unit-тесты пула SSH-сессий демона (без SSH/БД) ────────────────
 #   SessionPool: сборка до size, параллельная выдача, keepalive, close;
-#   Daemon._pool_for: ched/ched2 — общий пул, sed/ksp — отдельные.
+#   Daemon._pool_for: ched/ched2 — общий пул, sed/ksp/monitoring — отдельные.
 import os, sys, queue
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -67,18 +67,32 @@ z = pool2.acquire(timeout=1); pool2.release(z)
 ok(x is y and y is z, 'под низкой нагрузкой отдаётся та же сессия (нет лишних коннектов)')
 
 print('== Daemon._pool_for ==')
-# профили ched/ksp требуют конфиг — включаем для теста маппинга
-D.CHED_TARGET_HOST = 'x'
-D.KSP_TARGET_HOST  = 'x'
+# профили ched/ksp/monitoring требуют конфиг — включаем для теста маппинга
+D.CHED_TARGET_HOST       = 'x'
+D.KSP_TARGET_HOST        = 'x'
+D.MONITORING_TARGET_HOST = 'x'
 d = D.Daemon()
-p_sed   = d._pool_for('sed')
-p_ched  = d._pool_for('ched')
+p_sed  = d._pool_for('sed')
+p_ched = d._pool_for('ched')
 p_ched2 = d._pool_for('ched2')
-p_ksp   = d._pool_for('ksp')
+p_ksp  = d._pool_for('ksp')
+p_mon  = d._pool_for('monitoring')
 ok(p_ched is p_ched2, 'ched и ched2 — общий пул')
 ok(p_sed is not p_ched, 'sed — отдельный пул')
 ok(p_ksp is not p_ched and p_ksp is not p_sed, 'ksp — отдельный пул')
+ok(p_mon is not p_ched and p_mon is not p_sed and p_mon is not p_ksp, 'monitoring — отдельный пул')
 ok(p_sed._size == D.SED_POOL_SIZE, f'размер sed-пула = SED_POOL_SIZE ({D.SED_POOL_SIZE})')
+ok(p_mon._size == D.MONITORING_POOL_SIZE, f'размер monitoring-пула = MONITORING_POOL_SIZE ({D.MONITORING_POOL_SIZE})')
+
+# неконфигурированный monitoring → понятная ошибка
+D.MONITORING_TARGET_HOST = ''
+d3 = D.Daemon()
+raised_mon = False
+try:
+    d3._pool_for('monitoring')
+except RuntimeError:
+    raised_mon = True
+ok(raised_mon, 'monitoring без MONITORING_TARGET_HOST → RuntimeError')
 
 # неконфигурированный профиль → понятная ошибка
 D.CHED_TARGET_HOST = ''

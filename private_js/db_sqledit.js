@@ -179,7 +179,7 @@
   async function loadSchema() {
     if (schemaLoaded || schemaLoading) return;
     schemaLoading = true;
-    const schema = (window.state && (state.currentDb === 'ched' || state.currentDb === 'ched2' || state.currentDb === 'ksp') && state.chedSchema)
+    const schema = (window.state && (state.currentDb === 'ched' || state.currentDb === 'ched2' || state.currentDb === 'ksp' || state.currentDb === 'monitoring') && state.chedSchema)
       ? state.chedSchema : 'public';
     const sql =
       "SELECT table_name, column_name " +

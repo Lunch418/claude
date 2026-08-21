@@ -41,12 +41,12 @@ sudo -u www-data nano /var/www/sed/.env      # заполнить все зна�
 sudo chmod 600 /var/www/sed/.env
 ```
 - `SED_ADMIN_PASS` — bcrypt-ХЕШ: `php -r 'echo password_hash("пароль",PASSWORD_BCRYPT);'`
-- `SED_DEBUG=0` в проде; заполнить PAM/TARGET/DB/LOG_DB/CHED/KSP, `AUTH_ORG_ID`.
-- Размеры пулов: `SED_POOL_SIZE`, `CHED_POOL_SIZE`, `KSP_POOL_SIZE`.
+- `SED_DEBUG=0` в проде; заполнить PAM/TARGET/DB/LOG_DB/CHED/KSP/MONITORING, `AUTH_ORG_ID`.
+- Размеры пулов: `SED_POOL_SIZE`, `CHED_POOL_SIZE`, `KSP_POOL_SIZE`, `MONITORING_POOL_SIZE`.
 
 ## 3. PostgreSQL — роли least-privilege (КРИТИЧНО)
 Настоящая граница безопасности (детали и SQL — в `SECURITY.md`). Для КАЖДОЙ
-роли (`DB_USER`, `CHED_DB_USER`, `KSP_DB_USER`, `LOG_DB_USER`):
+роли (`DB_USER`, `CHED_DB_USER`, `KSP_DB_USER`, `MONITORING_DB_USER`, `LOG_DB_USER`):
 ```sql
 ALTER ROLE sed_ro NOSUPERUSER NOCREATEDB NOCREATEROLE;
 GRANT CONNECT ON DATABASE <db> TO sed_ro;

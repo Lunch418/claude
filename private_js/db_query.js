@@ -141,8 +141,8 @@ async function execQuery(sql, opts = {}) {
       // Локальная БД — всегда синхронно
       res = await apiCall(sql, 'preview', 0);
       if (!res) return;
-    } else if (state.currentDb === 'ched' || state.currentDb === 'ched2' || state.currentDb === 'ksp') {
-      // CHED/CHED2/KSP: фоновый polling-путь (submit) идёт с кредами СЭД и не
+    } else if (state.currentDb === 'ched' || state.currentDb === 'ched2' || state.currentDb === 'ksp' || state.currentDb === 'monitoring') {
+      // CHED/CHED2/KSP/monitoring: фоновый polling-путь (submit) идёт с кредами СЭД и не
       // знает профиль/схему. Поэтому выполняем синхронно через демон —
       // он корректно подставляет креды профиля и search_path для схемы.
       const chedLimit = (isAll || forceLimitZero) ? 0 : fetchLimit;
@@ -179,7 +179,7 @@ async function execQuery(sql, opts = {}) {
     // и вернулось ровно INITIAL_LOAD строк (значит есть ещё)
     state.hasMore      = isAll && res.rows?.length >= INITIAL_LOAD
                          && state.currentDb !== 'ched' && state.currentDb !== 'ched2'
-                         && state.currentDb !== 'ksp';
+                         && state.currentDb !== 'ksp' && state.currentDb !== 'monitoring';
     state.page         = 1;
 
     const detectedDate = detectDateColumn(state.currentTable, state.columns);
@@ -268,7 +268,7 @@ function _renderLoadMoreBar() {
 // ── submit/poll для дозагрузки и тяжёлых запросов ────────────
 async function _runWithPolling(sql, limit, offset, t0) {
   // Профиль/схема — как в apiCall, иначе тяжёлый запрос уйдёт в базу СЭД
-  const _profile = (state.currentDb === 'ched' || state.currentDb === 'ched2' || state.currentDb === 'ksp') ? state.currentDb : 'sed';
+  const _profile = (state.currentDb === 'ched' || state.currentDb === 'ched2' || state.currentDb === 'ksp' || state.currentDb === 'monitoring') ? state.currentDb : 'sed';
   const _schema  = _profile !== 'sed' ? (state.chedSchema || '') : '';
   const submitResp = await fetch(`${API}?m=Remote&a=submit`, {
     method:      'POST',

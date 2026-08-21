@@ -42,17 +42,17 @@ class RemoteController {
         return !empty($sessionUser['isAdmin']) || !empty($sessionUser['canRemote']);
     }
 
-    /** Извлекает и проверяет профиль источника и схему. CHED/KSP — только админам. */
+    /** Извлекает и проверяет профиль источника и схему. CHED/KSP/monitoring — только админам. */
     private function resolveProfile(array $body): array {
         $req = $body['profile'] ?? 'sed';
-        $profile = in_array($req, ['ched', 'ched2', 'ksp'], true) ? $req : 'sed';
+        $profile = in_array($req, ['ched', 'ched2', 'ksp', 'monitoring'], true) ? $req : 'sed';
         $schema  = trim((string)($body['schema'] ?? ''));
         if ($schema !== '' && !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $schema)) {
             $schema = '';
         }
         if ($profile !== 'sed') {
             $u = $_SESSION['sed_user'] ?? null;
-            // К CHED/CHED2/KSP пускаем админа и пользователей с флагом canRemote
+            // К CHED/CHED2/KSP/monitoring пускаем админа и пользователей с флагом canRemote
             // (выставляется на сервере при входе по ФИО из .env).
             if (empty($u['isAdmin']) && empty($u['canRemote'])) {
                 return ['__denied__' => true];
