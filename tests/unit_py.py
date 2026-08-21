@@ -51,6 +51,15 @@ def extract_csv_safe(source, label):
     exec(m.group(0), ns)
     return ns['_csv_safe']
 
+def extract_json_safe(source, label):
+    m = re.search(r'_JS_MAX_SAFE_INT = .*?\n\ndef _json_safe\(v\):.*?\n    return v', source, re.S)
+    if not m:
+        ok(False, f'{label}: _json_safe найден в remote-скрипте')
+        return None
+    ns = {}
+    exec(m.group(0), ns)
+    return ns['_json_safe']
+
 print('== _csv_safe в встроенных remote-скриптах (V-03) ==')
 runner_src = pam_runner._REMOTE_SCRIPT.decode()
 daemon_src = base64.b64decode(pam_daemon._REMOTE_SCRIPT_B64).decode()
@@ -65,6 +74,23 @@ for label, src in [('pam_runner', runner_src), ('pam_daemon', daemon_src)]:
     ok(fn('\tT')  == "'\tT",   f'{label}: ведущий TAB')
     ok(fn('abc')  == 'abc',    f'{label}: обычный текст без изменений')
     ok(fn(None)   == '',       f'{label}: None → пустая строка')
+    ok(fn('123456789012345') == '123456789012345',
+       f'{label}: 15-значное число — как есть (не bigint)')
+    ok(fn('700000000000002486') == '="700000000000002486"',
+       f'{label}: 18-значный bigint — обёрнут в текстовую формулу для Excel')
+
+print('== _json_safe (точность bigint через JSON→JS) в встроенных remote-скриптах ==')
+for label, src in [('pam_runner', runner_src), ('pam_daemon', daemon_src)]:
+    fn = extract_json_safe(src, label)
+    if not fn:
+        continue
+    ok(fn(42) == 42,                            f'{label}: маленький int — без изменений')
+    ok(fn(700000000000002486) == '700000000000002486',
+       f'{label}: bigint за пределами Number.MAX_SAFE_INTEGER → строка')
+    ok(fn(-700000000000002486) == '-700000000000002486',
+       f'{label}: отрицательный bigint → строка')
+    ok(fn('text') == 'text',                    f'{label}: строка — без изменений')
+    ok(fn(None) is None,                        f'{label}: None — без изменений')
 
 print(f'\n== Итог: fail={fail} ==')
 sys.exit(0 if fail == 0 else 1)

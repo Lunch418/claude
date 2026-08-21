@@ -213,15 +213,36 @@ def _dedup_cols(description):
             cols.append(name)
     return cols
 
+_JS_MAX_SAFE_INT = 9007199254740991  # 2**53 - 1
+
+def _json_safe(v):
+    # JS parses JSON numbers as IEEE-754 doubles (~15-17 significant
+    # digits). A bigint id/pk beyond this range gets silently rounded
+    # by JSON.parse() in the browser and later shown as "7.00E+17"
+    # instead of the exact value. Send it as a string instead - JS
+    # keeps a string byte-for-byte.
+    if isinstance(v, int) and (v > _JS_MAX_SAFE_INT or v < -_JS_MAX_SAFE_INT):
+        return str(v)
+    return v
+
 def _rows_as_dicts(cursor, cols):
     \"\"\"Fetch all rows as dicts using index (safe with duplicate col names).\"\"\"
-    return [dict(zip(cols, row)) for row in cursor.fetchall()]
+    return [
+        {col: _json_safe(v) for col, v in zip(cols, row)}
+        for row in cursor.fetchall()
+    ]
 
 def _csv_safe(v):
     # CSV/formula injection: neutralize leading =,+,-,@,\\t,\\r
     s = '' if v is None else str(v)
     if s[:1] in ('=', '+', '-', '@', '\\t', '\\r'):
         return \"'\" + s
+    # Long all-digit values (bigint ids, 16+ digits): Excel auto-detects
+    # the CSV cell as a number on open and reformats it into scientific
+    # notation, losing precision - even though the CSV text itself is
+    # exact. Wrap as a text formula so Excel shows the value as-is.
+    if s.isdigit() and len(s) > 15:
+        return '="' + s + '"'
     return s
 
 try:

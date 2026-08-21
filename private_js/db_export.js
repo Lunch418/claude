@@ -55,7 +55,13 @@ function _safeText(v) {
   return s.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 function _csvEsc(v, delim) {
-  const s = _safeText(v);
+  let s = _safeText(v);
+  // Длинные числа (bigint id, 16+ цифр): при открытии CSV Excel сам
+  // определяет ячейку как число и переводит в экспоненциальную запись
+  // с потерей точности. Оборачиваем в текстовую формулу — Excel
+  // показывает значение как есть. (В HTML-варианте «Excel» этого не
+  // нужно — там текстовый формат уже форсирован через mso-number-format.)
+  if (/^\d{16,}$/.test(s)) s = '="' + s + '"';
   return (s.includes(delim) || s.includes('"') || s.includes('\n'))
     ? `"${s.replace(/"/g, '""')}"` : s;
 }
