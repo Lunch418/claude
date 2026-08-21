@@ -55,6 +55,21 @@ grep -q "http-equiv=\"Content-Security-Policy\"" db_viewer.html \
   && ! grep -q "script-src 'self' 'unsafe-inline'" db_viewer.html \
   && echo "  ok: db_viewer.html meta" || { echo "  FAIL: db_viewer.html meta CSP"; RC=1; }
 
+step "STATIC: проверка ключа SSH-бастиона включена (S1)"
+BAD="$(grep -nE "StrictHostKeyChecking=no|UserKnownHostsFile=/dev/null" scripts/pam_daemon.py scripts/pam_runner.py \
+  | grep -vE '^[^:]*:[^:]*:[[:space:]]*#')"
+if [ -n "$BAD" ]; then
+  echo "$BAD"; echo "  FAIL: найден отключённый host-key checking"; RC=1
+else
+  GOOD_D="$(grep -c "StrictHostKeyChecking=accept-new" scripts/pam_daemon.py)"
+  GOOD_R="$(grep -c "StrictHostKeyChecking=accept-new" scripts/pam_runner.py)"
+  if [ "$GOOD_D" -ge 1 ] && [ "$GOOD_R" -ge 1 ]; then
+    echo "  ok: accept-new + постоянный known_hosts в обоих remote-скриптах"
+  else
+    echo "  FAIL: accept-new не найден"; RC=1
+  fi
+fi
+
 step "STATIC: assets/js — только живые файлы (без мёртвых дубликатов)"
 EXPECTED="$(printf '%s\n' db_2fa.js db_auth.js db_boot.js db_init.js db_utils.js qrcode.js | sort | tr '\n' ' ')"
 ACTUAL="$(ls assets/js | sort | tr '\n' ' ')"

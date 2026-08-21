@@ -37,6 +37,27 @@ PID_FILE       = '/tmp/sed_daemon.pid'
 QUERY_TIMEOUT  = 600
 SOCK_WAIT_SECS = 300
 
+# known_hosts бастиона PAM (S1) - see pam_daemon.py for the full writeup.
+# accept-new pins the key on first successful connect and persists it
+# outside /tmp; a later key swap (MITM or real reinstall) then makes
+# ssh refuse instead of silently trusting whatever key shows up.
+# Ops: verify the fingerprint in this file against the PAM admins over
+# an out-of-band channel after the first deploy - TOFU only protects
+# against key changes AFTER that first connection, not during it.
+def _default_known_hosts():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.normpath(os.path.join(script_dir, '..', 'storage', 'pam_known_hosts'))
+
+PAM_KNOWN_HOSTS_FILE = os.environ.get('PAM_KNOWN_HOSTS_FILE', '') or _default_known_hosts()
+try:
+    os.makedirs(os.path.dirname(PAM_KNOWN_HOSTS_FILE), exist_ok=True)
+    if not os.path.exists(PAM_KNOWN_HOSTS_FILE):
+        Path(PAM_KNOWN_HOSTS_FILE).touch(mode=0o600)
+    else:
+        os.chmod(PAM_KNOWN_HOSTS_FILE, 0o600)
+except OSError:
+    pass
+
 # ── Конфигурация — только из окружения, дефолты пустые ───────────────────
 PAM_HOST    = os.environ.get('PAM_HOST',        '')
 PAM_PORT    = os.environ.get('PAM_PORT',        '22')
@@ -349,7 +370,7 @@ def query_direct_ssh(sql, mode, limit, offset=0):
 
     cmd = (
         f'ssh -tt -p {PAM_PORT} -F /dev/null'
-        f' -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+        f' -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile={PAM_KNOWN_HOSTS_FILE}'
         f' -o ServerAliveInterval=15 -o ConnectTimeout=20'
         f' -o KexAlgorithms=+diffie-hellman-group14-sha1'
         f' -o HostKeyAlgorithms=+ssh-rsa'

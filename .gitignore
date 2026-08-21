@@ -6,6 +6,8 @@
 # Экспорт и рантайм-артефакты (структуру каталога сохраняем,
 # .htaccess/.gitkeep трекаем, сами выгрузки — нет)
 /storage/exports/*.csv
+# known_hosts бастиона PAM — фиксируется на бою при первом коннекте (S1)
+/storage/pam_known_hosts
 
 # Python
 __pycache__/

@@ -43,6 +43,33 @@ PID_FILE   = '/tmp/sed_daemon.pid'
 LOG_FILE   = '/tmp/sed_daemon.log'
 CACHE_DIR  = '/tmp/sed_cache'
 
+# ── known_hosts бастиона PAM (S1) ───────────────────────────────────
+# Раньше был StrictHostKeyChecking=no + UserKnownHostsFile=/dev/null —
+# ключ бастиона вообще не проверялся, и через каждое SSH-соединение
+# в открытом (для MITM на пути) виде идут PAM-пароль и креды всех БД.
+# accept-new — TOFU: ключ фиксируется при первом успешном подключении
+# и хранится тут постоянно; при подмене ключа на бастионе (MITM или
+# реальная переустановка) ssh откажется соединяться, а не проглотит
+# новый ключ молча. Путь — вне /tmp, чтобы фиксация не терялась между
+# рестартами демона. ВАЖНО (эксплуатация): после первого запуска
+# сверьте отпечаток из этого файла с администраторами PAM по
+# доверенному каналу (не через это же соединение) — TOFU защищает от
+# подмены ключа ПОСЛЕ первого раза, но не от MITM в момент самого
+# первого подключения.
+def _default_known_hosts():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.normpath(os.path.join(script_dir, '..', 'storage', 'pam_known_hosts'))
+
+PAM_KNOWN_HOSTS_FILE = os.environ.get('PAM_KNOWN_HOSTS_FILE', '') or _default_known_hosts()
+try:
+    os.makedirs(os.path.dirname(PAM_KNOWN_HOSTS_FILE), exist_ok=True)
+    if not os.path.exists(PAM_KNOWN_HOSTS_FILE):
+        Path(PAM_KNOWN_HOSTS_FILE).touch(mode=0o600)
+    else:
+        os.chmod(PAM_KNOWN_HOSTS_FILE, 0o600)
+except OSError:
+    pass  # нет доступа к диску на этом этапе — ssh сам сообщит об ошибке при коннекте
+
 CACHE_TTL        = 20    # секунд — живые данные (было 60)
 CACHE_TTL_LONG   = 3600  # секунд — для справочников (1 час)
 KEEPALIVE_SEC    = 45
@@ -262,11 +289,11 @@ class Session:
 
     def connect(self):
         px = self.px
-        log.info('Connecting to PAM %s:%s (.env: %s)', PAM_HOST, PAM_PORT, _env_file or 'not found')
+        log.info('Connecting to PAM %s:%s (.env: %s, known_hosts: %s)', PAM_HOST, PAM_PORT, _env_file or 'not found', PAM_KNOWN_HOSTS_FILE)
         cmd = (
             f'ssh -tt -p {PAM_PORT} -F /dev/null'
-            f' -o StrictHostKeyChecking=no'
-            f' -o UserKnownHostsFile=/dev/null'
+            f' -o StrictHostKeyChecking=accept-new'
+            f' -o UserKnownHostsFile={PAM_KNOWN_HOSTS_FILE}'
             f' -o ServerAliveInterval=20'
             f' -o ServerAliveCountMax=3'
             f' -o ConnectTimeout=20'
