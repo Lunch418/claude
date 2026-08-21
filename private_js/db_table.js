@@ -36,17 +36,23 @@ async function loadTableList() {
     // Таймаут 20 секунд — если нет ответа, показываем ошибку вместо вечного спиннера
     const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('Превышено время ожидания (20с)')), 20000));
     const res = await Promise.race([apiCall(sql), timeout]);
-    if (res.ok && res.rows.length) {
+    if (res.ok) {
       state.tables = res.rows.map(r => ({
         name:    r.table_name,
         comment: (r.table_comment || '').trim() || (TABLE_LABELS_FALLBACK[r.table_name] || '')
       }));
+      state.tablesLoadOk = true;   // запрос реально прошёл — даже если таблиц 0
       setStatus('ok', `Загружено ${state.tables.length} ${plural(state.tables.length,"таблица","таблицы","таблиц")}`);
     } else {
       state.tables = [];
+      state.tablesLoadOk = false;
       setStatus('err', res.error || 'Не удалось загрузить таблицы');
     }
-  } catch (e) { state.tables = []; setStatus('err', 'Ошибка: ' + e.message); }
+  } catch (e) {
+    state.tables = [];
+    state.tablesLoadOk = false;
+    setStatus('err', 'Ошибка: ' + e.message);
+  }
 
   document.getElementById('tblCountBadge').textContent = `${state.tables.length} ${plural(state.tables.length,'таблица','таблицы','таблиц')}`;
   document.getElementById('tblCount').textContent      = `${state.tables.length} ${plural(state.tables.length,'таблица','таблицы','таблиц')}`;
@@ -134,9 +140,21 @@ function renderTableList(filter = '') {
     : `${state.tables.length} ${plural(state.tables.length,'таблица','таблицы','таблиц')}`;
 
   if (!tables.length) {
-    const msg = state.tables.length === 0 && !q
-      ? '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity=".8"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div style="color:var(--c-red);font-size:12px;font-weight:500;margin-top:4px">Не удалось загрузить таблицы</div><div style="font-size:11px;color:var(--c-text-3);margin-top:2px">Проверьте подключение к БД</div>'
-      : '<div style="font-size:12px;color:var(--c-text-3)">Не найдено</div>';
+    // Три разных случая пустого списка — не путать их между собой:
+    //  1) реальная ошибка (нет сети/подключения/прав) — красный алерт;
+    //  2) запрос прошёл, но в выбранной схеме действительно 0 таблиц —
+    //     нейтральное сообщение (раньше тут тоже показывался алерт
+    //     «проверьте подключение», что вводило в заблуждение — БД была
+    //     доступна, просто в схеме по умолчанию нет таблиц);
+    //  3) есть таблицы, но ни одна не подошла под поисковый фильтр.
+    let msg;
+    if (state.tables.length === 0 && !q && !state.tablesLoadOk) {
+      msg = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity=".8"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div style="color:var(--c-red);font-size:12px;font-weight:500;margin-top:4px">Не удалось загрузить таблицы</div><div style="font-size:11px;color:var(--c-text-3);margin-top:2px">Проверьте подключение к БД</div>';
+    } else if (state.tables.length === 0 && !q) {
+      msg = '<div style="font-size:12px;color:var(--c-text-3)">В этой схеме нет таблиц</div><div style="font-size:11px;color:var(--c-text-3);margin-top:2px">Попробуйте выбрать другую схему вверху</div>';
+    } else {
+      msg = '<div style="font-size:12px;color:var(--c-text-3)">Не найдено</div>';
+    }
     list.innerHTML = `<div class="placeholder" style="height:100px">${msg}</div>`;
     return;
   }

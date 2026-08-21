@@ -35,10 +35,15 @@ let state = {
   fkRows:[],
   hiddenColumns: new Set(),
   // Загрузить ещё
-  hasMore: false,    
-  loadOffset: 0,       
-  lastSql: '',          
-  lastLimit: 200,       
+  hasMore: false,
+  loadOffset: 0,
+  lastSql: '',
+  lastLimit: 200,
+  // true — последняя загрузка списка таблиц реально прошла (даже если
+  // нашла 0 таблиц в схеме); false — только при настоящей ошибке
+  // (сеть/БД/SQL). Отличает «схема просто пустая» от «нет подключения»
+  // в плейсхолдере списка таблиц (db_table.js: renderTableList).
+  tablesLoadOk: true,
 };
 
 let _sqlBarCollapsed  = true;
@@ -1271,6 +1276,17 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+// Отображаемое имя внешнего источника для статус-сообщений
+// (раньше везде было захардкожено «CHED» — вводило в заблуждение на
+// KSP/АИС Мониторинг: писало «CHED · public: 0 таблиц» вместо реального имени).
+function _remoteLabel(db) {
+  return db === 'ched' ? 'CHED'
+       : db === 'ched2' ? 'CHED2'
+       : db === 'ksp' ? 'КСП'
+       : db === 'monitoring' ? 'АИС Мониторинг'
+       : 'CHED';
+}
+
 // ── Переключение БД (только для админа) ──────────────────────
 function switchDb(db) {
   // Локальная БД — только админ; CHED/CHED2/SED — админ или разрешённое ФИО
@@ -1342,7 +1358,7 @@ function switchDb(db) {
       tableList.dataset.renderedFilter = '__reset__';
       tableList.innerHTML = '<div class="placeholder" style="height:120px"><div class="loading-spinner"></div><div style="font-size:12px;margin-top:6px;color:var(--c-text-3)">Загрузка схем...</div></div>';
     }
-    setStatus('ok', 'CHED: загрузка схем...');
+    setStatus('ok', `${_remoteLabel(db)}: загрузка схем...`);
     loadChedSchemas();
   } else {
     if (tabTemplates) tabTemplates.style.display = '';
@@ -1369,17 +1385,24 @@ async function loadChedSchemas() {
       "AND schema_name NOT LIKE 'pg_temp%' AND schema_name NOT LIKE 'pg_toast%' " +
       "ORDER BY schema_name";
     const res = await apiCall(sql, 'preview', 1000);
-    if (!res || !res.ok) { setError((res && res.error) || 'Не удалось загрузить схемы CHED'); return; }
+    if (!res || !res.ok) {
+      state.tablesLoadOk = false;
+      setError((res && res.error) || `Не удалось загрузить схемы (${_remoteLabel(state.currentDb)})`);
+      return;
+    }
     const schemas = (res.rows || []).map(r => r.schema_name).filter(Boolean);
     if (sel) sel.innerHTML = schemas.map(s =>
       `<option value="${s.replace(/"/g, '&quot;')}">${s}</option>`).join('');
-    if (!schemas.length) { setStatus('ok', 'CHED: схемы не найдены'); return; }
+    if (!schemas.length) { setStatus('ok', `${_remoteLabel(state.currentDb)}: схемы не найдены`); return; }
     const want = (state.chedSchema && schemas.includes(state.chedSchema)) ? state.chedSchema : schemas[0];
     state.chedSchema = want;
     if (sel) sel.value = want;
     if (typeof window.__resetSqlSchema === 'function') window.__resetSqlSchema();
     loadChedTables();
-  } catch (e) { setError('Ошибка загрузки схем CHED: ' + e.message); }
+  } catch (e) {
+    state.tablesLoadOk = false;
+    setError(`Ошибка загрузки схем (${_remoteLabel(state.currentDb)}): ` + e.message);
+  }
 }
 
 function onChedSchemaChange(schema) {
@@ -1408,12 +1431,18 @@ async function loadChedTables() {
       state.tables = (res.rows || []).map(r => ({
         name: r.table_name, comment: (r.table_comment || '').trim(),
       }));
-      setStatus('ok', `CHED · ${schema}: ${state.tables.length} ${plural(state.tables.length, 'таблица', 'таблицы', 'таблиц')}`);
+      state.tablesLoadOk = true;   // запрос реально прошёл — даже если таблиц 0
+      setStatus('ok', `${_remoteLabel(state.currentDb)} · ${schema}: ${state.tables.length} ${plural(state.tables.length, 'таблица', 'таблицы', 'таблиц')}`);
     } else {
       state.tables = [];
-      setError((res && res.error) || 'Не удалось загрузить таблицы CHED');
+      state.tablesLoadOk = false;
+      setError((res && res.error) || `Не удалось загрузить таблицы (${_remoteLabel(state.currentDb)})`);
     }
-  } catch (e) { state.tables = []; setError('Ошибка CHED: ' + e.message); }
+  } catch (e) {
+    state.tables = [];
+    state.tablesLoadOk = false;
+    setError(`Ошибка (${_remoteLabel(state.currentDb)}): ` + e.message);
+  }
 
   const c1 = document.getElementById('tblCountBadge');
   const c2 = document.getElementById('tblCount');
